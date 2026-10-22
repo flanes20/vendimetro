@@ -1,0 +1,31 @@
+LIBRO DE VENTAS para Mac - Cómo usarlo
+======================================
+
+INSTALAR
+  1. Arrastra "Libro de Ventas" sobre la carpeta "Aplicaciones".
+  2. Abre Aplicaciones y haz doble clic en "Libro de Ventas".
+
+  La primera vez la Mac dice que no puede verificar el programa.
+  Es normal: el programa no está registrado en Apple.
+    a) Toca "OK" (o "Listo").
+    b) Abre Ajustes del Sistema > Privacidad y seguridad.
+    c) Baja hasta abajo y toca "Abrir igualmente". Escribe tu contraseña.
+  Solo pasa la primera vez.
+
+  Si la Mac pregunta si el programa puede acceder a "Documentos", toca "Permitir":
+  ahí se guardan tus datos.
+
+USAR
+  Se abre como cualquier programa. Para salir: menú "Libro de Ventas" > Salir (o Cmd+Q).
+  Todo se guarda solo; no hay que tocar "Guardar".
+
+PRIMEROS PASOS
+  1. Ajustes: escribe el nombre del negocio y la moneda.
+  2. Productos: carga tus productos uno por uno, o importa un Excel
+     (en Ajustes > Excel puedes bajar una plantilla).
+  3. Para vender, usa el botón "Nueva venta".
+  4. Anota los gastos (alquiler, luz, sueldos) para ver la ganancia real.
+
+DÓNDE SE GUARDAN LOS DATOS
+  En Documentos > Libro de Ventas > ventas.db
+  Cada día que se abre el programa se guarda una copia en la carpeta "Respaldos".
