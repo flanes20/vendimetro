@@ -160,6 +160,26 @@ def dialogo(tipo, **kw):
 class ApiVentana:
     """Funciones que la pantalla puede llamar a través de window.pywebview.api."""
 
+    def __init__(self):
+        self._pendiente = ""
+        self._forzar_cierre = False
+
+    def set_pendiente(self, texto):
+        """La pantalla avisa si hay una venta o compra a medias (texto vacío = nada)."""
+        self._pendiente = texto or ""
+
+    def cerrar(self):
+        import webview
+        self._forzar_cierre = True
+        webview.windows[0].destroy()
+
+    def al_cerrar(self, ventana):
+        """Si hay trabajo a medias, cancela el cierre y pregunta en la pantalla."""
+        if self._forzar_cierre or not self._pendiente:
+            return True
+        threading.Thread(target=lambda: ventana.evaluate_js("pedirCierre()"), daemon=True).start()
+        return False
+
     def guardar_archivo(self, nombre, contenido):
         ruta = dialogo("SAVE", save_filename=nombre)
         if not ruta:
@@ -249,7 +269,9 @@ if __name__ == "__main__":
         threading.Event().wait()
 
     import webview
-    webview.create_window("Libro de Ventas", url, js_api=ApiVentana(), width=1360, height=860, min_size=(1000, 650), maximized=True)
+    api = ApiVentana()
+    ventana = webview.create_window("Libro de Ventas", url, js_api=api, width=1360, height=860, min_size=(1000, 650), maximized=True)
+    ventana.events.closing += lambda: api.al_cerrar(ventana)
     try:
         webview.start(private_mode=False, storage_path=str(CARPETA / ".ventana"), icon=str(BASE / "icono.ico"))
     finally:

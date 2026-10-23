@@ -59,6 +59,20 @@ def correr(w):
     key = js(w, "(()=>{const v=M().ventas.find(v=>v.folio===1);return v.fecha+'|'+v.id})()")
     js(w, f"ACT.anular('{key}'); ACT.confirmOk();"); esperar(w, 2)
 
+    # venta a medias: se guarda sola, pregunta antes de cerrar y se recupera al reabrir
+    js(w, f"ACT.go('pos'); ACT.posAdd('{pid}'); ACT.posAdd('{pid}'); S.pos.cli='{cid}';"); esperar(w)
+    ok("avisa que hay una venta sin cobrar", api._pendiente.startswith("Tienes una venta sin cobrar"), api._pendiente)
+    ok("no cierra si hay una venta a medias", api.al_cerrar(w) is False); esperar(w)
+    ok("pregunta antes de cerrar", js(w, "$('#dlgT').textContent") == "¿Cerrar Libro de Ventas?")
+    js(w, "ACT.cerrar(); ACT.go('panel')")
+    # simular reapertura: vaciar la memoria y recuperar desde la base de datos, como hace el arranque
+    guardado = json.loads(urllib.request.urlopen(URL + "api/all").read())["config"].get("borrador", {})
+    ok("la venta a medias quedó guardada en la base", [i["cant"] for i in guardado.get("pos", {}).get("items", [])] == [2], json.dumps(guardado)[:200])
+    js(w, f"S.pos.items=[]; S.pos.cli=''; S.page='panel'; recuperarBorrador({json.dumps(guardado)}); render();"); esperar(w)
+    ok("al reabrir recupera la venta a medias", js(w, "S.pos.items.length===1 && S.pos.items[0].cant===2") and js(w, "S.pos.cli") == cid and js(w, "S.page") == "pos")
+    js(w, "ACT.posVaciar()"); esperar(w)
+    ok("al vaciar ya no avisa", api._pendiente == "" and api.al_cerrar(w) is True)
+
     # recorrer todas las pantallas y todos los modos de período
     js(w, "for (const p of Object.keys(PAGES)) { S.page=p; for (const m of ['dia','mes','anio','rango']) { P.modo=m; render(); } } P.modo='mes';")
     js(w, "for (const t of ['producto','categoria','cliente','pago']) { S.repTab=t; S.page='reportes'; render(); }")
@@ -70,7 +84,8 @@ def correr(w):
     ok("sin errores en pantalla", not errs, "; ".join(errs or []))
     w.destroy()
 
-w = webview.create_window("prueba", URL, js_api=app.ApiVentana(), width=1300, height=850)
+api = app.ApiVentana()
+w = webview.create_window("prueba", URL, js_api=api, width=1300, height=850)
 webview.start(correr, w, private_mode=True)
 
 # leer la base de datos directamente desde el archivo, como si se reabriera el programa

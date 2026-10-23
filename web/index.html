@@ -360,7 +360,7 @@ const S = {
 };
 const now = new Date();
 const P = { modo: "mes", dia: hoy(), y: now.getFullYear(), m: now.getMonth() + 1, desde: iso(new Date(now.getFullYear(), now.getMonth(), 1)), hasta: hoy() };
-let real = null, realModo = null;
+let real = null, realModo = null, realTrabajo = null;
 
 /* ===================== base de datos ===================== */
 async function api(metodo, ruta, cuerpo) {
@@ -737,6 +737,7 @@ function posTotals() {
   $("#posVuelto").innerHTML = ps.pago === "efectivo" && ps.recibido !== "" && ps.items.length ? `<div class="vuelto${c.vuelto < 0 ? " neg" : ""}"><span>${c.vuelto < 0 ? "Falta" : "Vuelto"}</span><span>${money(Math.abs(c.vuelto))}</span></div>` : "";
   $("#posCobrar").disabled = !ps.items.length;
   $("#posCobrar").textContent = ps.items.length ? `Cobrar ${money(c.total)}` : "Cobrar";
+  borrador();
 }
 function postPos() { posGrid(); posTicket(); }
 
@@ -923,9 +924,42 @@ function render() {
   if (post) post();
   if (actId) { const el = document.getElementById(actId); if (el) { el.focus({ preventScroll: true }); if (selS) try { el.setSelectionRange(...selS); } catch (e) {} } }
   window.scrollTo(0, scroll);
+  borrador();
 }
 let rT = 0;
 function renderSoon() { clearTimeout(rT); rT = setTimeout(render, 60); }
+
+/* ===================== borrador: venta y compra en curso ===================== */
+// Se guarda solo mientras se arma, para no perderlo si el programa se cierra.
+let borradorT = 0, borradorPrevio = null;
+function trabajoPendiente() {
+  if (S.pos.items.length) return `Tienes una venta sin cobrar de ${money(calcPos().total)}`;
+  if (S.compra.items.length) return "Tienes una compra sin registrar";
+  return "";
+}
+function borrador() {
+  if (S.modo !== "db") return;
+  clearTimeout(borradorT);
+  borradorT = setTimeout(async () => {
+    const pos = { ...S.pos, q: "" };
+    const datos = JSON.stringify({ pos, compra: S.compra });
+    window.pywebview?.api?.set_pendiente?.(trabajoPendiente());
+    if (datos === borradorPrevio) return;
+    try { await api("PUT", rutaDoc("config", "borrador"), JSON.parse(datos)); borradorPrevio = datos; } catch (e) { console.warn("borrador", e); }
+  }, 400);
+}
+function recuperarBorrador(b) {
+  if (!b) return;
+  borradorPrevio = JSON.stringify(b);
+  if (b.pos) { Object.assign(S.pos, b.pos, { q: "" }); S.pos.items = (S.pos.items || []).filter(it => S.data.productos[it.pid]); }
+  if (b.compra) { S.compra = { ...S.compra, ...b.compra }; S.compra.items = (S.compra.items || []).filter(it => S.data.productos[it.pid]); }
+  if (S.pos.items.length) { S.page = "pos"; setTimeout(() => toast("Recuperamos la venta que quedó sin cobrar"), 300); }
+  else if (S.compra.items.length) setTimeout(() => toast("Recuperamos la compra que quedó sin registrar"), 300);
+}
+function pedirCierre() {
+  abrir("¿Cerrar Libro de Ventas?", `<p>${esc(trabajoPendiente())}.</p><p class="muted">No se pierde: queda guardada y la encontrarás igual la próxima vez que abras el programa.</p>
+    <div class="dlg-f"><button class="btn pri" data-act="cerrar">Seguir trabajando</button><button class="btn" data-act="salirPrograma">Cerrar el programa</button></div>`);
+}
 
 /* ===================== avisos y diálogos ===================== */
 function toast(t, err) {
@@ -990,6 +1024,11 @@ function toCSV(rows) {
 const ACT = {
   go: id => { S.page = id; cerrar(); try { localStorage.setItem("lv-page", id); } catch (e) {} window.scrollTo(0, 0); render(); },
   cerrar: () => cerrar(),
+  salirPrograma: async () => {
+    clearTimeout(borradorT);
+    try { await api("PUT", rutaDoc("config", "borrador"), JSON.parse(JSON.stringify({ pos: { ...S.pos, q: "" }, compra: S.compra }))); } catch (e) {}
+    window.pywebview?.api?.cerrar?.();
+  },
   confirmOk: async () => { const fn = confirmFn; confirmFn = null; cerrar(); if (fn) await fn(); },
   permodo: id => { P.modo = id; if (id === "dia") P.dia = P.dia || hoy(); render(); },
   pershift: id => {
@@ -999,8 +1038,8 @@ const ACT = {
     else if (P.modo === "anio") P.y += d;
     render();
   },
-  verDemo: () => { real = S.data; realModo = S.modo; S.data = demoData(); S.modo = "demo"; touch(); S.page = "panel"; render(); toast("Mostrando datos de ejemplo"); },
-  salirDemo: () => { S.data = real || vacioData(); S.modo = realModo || "db"; real = null; touch(); S.cliSel = null; S.pos.items = []; render(); },
+  verDemo: () => { real = S.data; realModo = S.modo; realTrabajo = clone({ pos: S.pos, compra: S.compra }); S.data = demoData(); S.modo = "demo"; touch(); S.page = "panel"; render(); toast("Mostrando datos de ejemplo"); },
+  salirDemo: () => { S.data = real || vacioData(); S.modo = realModo || "db"; real = null; touch(); S.cliSel = null; if (realTrabajo) Object.assign(S, realTrabajo); realTrabajo = null; render(); },
   soloBajo: () => { S.prodBajo = true; S.page = "productos"; render(); },
   csv: id => {
     const rows = CSV[id]; if (!rows || rows.length < 2) return toast("No hay datos para exportar en este período.", true);
@@ -1376,6 +1415,8 @@ render();
     const [d, info] = await Promise.all([api("GET", "/api/all"), api("GET", "/api/info")]);
     for (const c of COLS) S.data[c] = d[c] || {};
     S.info = info; S.modo = "db";
+    const b = S.data.config.borrador; delete S.data.config.borrador;
+    recuperarBorrador(b);
   } catch (e) {
     S.modo = "sin";
     $("#content").innerHTML = `<div class="card offline"><div class="card-b"><h2>El programa no está abierto</h2><p>Para usar Libro de Ventas, abre el programa con doble clic en <b>Libro de Ventas</b> (el ícono del escritorio). Se abrirá esta pantalla automáticamente.</p></div></div>`;
