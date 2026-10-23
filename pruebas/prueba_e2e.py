@@ -1,9 +1,9 @@
 import json, os, shutil, tempfile, sqlite3, sys, threading, time, urllib.request
 from pathlib import Path
 
-TMP = Path(tempfile.gettempdir()) / "libro_prueba_e2e"
+TMP = Path(tempfile.gettempdir()) / "vendimetro_prueba_e2e"
 shutil.rmtree(TMP, ignore_errors=True)
-os.environ["LIBRO_VENTAS_DATOS"] = str(TMP)
+os.environ["VENDIMETRO_DATOS"] = str(TMP)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app
 import webview
@@ -63,7 +63,7 @@ def correr(w):
     js(w, f"ACT.go('pos'); ACT.posAdd('{pid}'); ACT.posAdd('{pid}'); S.pos.cli='{cid}';"); esperar(w)
     ok("avisa que hay una venta sin cobrar", api._pendiente.startswith("Tienes una venta sin cobrar"), api._pendiente)
     ok("no cierra si hay una venta a medias", api.al_cerrar(w) is False); esperar(w)
-    ok("pregunta antes de cerrar", js(w, "$('#dlgT').textContent") == "¿Cerrar Libro de Ventas?")
+    ok("pregunta antes de cerrar", js(w, "$('#dlgT').textContent") == "¿Cerrar Vendímetro?")
     js(w, "ACT.cerrar(); ACT.go('panel')")
     # simular reapertura: vaciar la memoria y recuperar desde la base de datos, como hace el arranque
     guardado = json.loads(urllib.request.urlopen(URL + "api/all").read())["config"].get("borrador", {})

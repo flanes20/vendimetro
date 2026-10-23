@@ -2,9 +2,9 @@ import os, shutil, sys, tempfile, threading, time
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
-TMP = Path(tempfile.gettempdir()) / "libro_prueba_excel"
+TMP = Path(tempfile.gettempdir()) / "vendimetro_prueba_excel"
 shutil.rmtree(TMP, ignore_errors=True); TMP.mkdir(parents=True)
-os.environ["LIBRO_VENTAS_DATOS"] = str(TMP / "datos")
+os.environ["VENDIMETRO_DATOS"] = str(TMP / "datos")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app, webview
 
@@ -60,7 +60,7 @@ def correr(w):
 w = webview.create_window("prueba excel", "http://127.0.0.1:8797/", js_api=app.ApiVentana())
 webview.start(correr, w, private_mode=True)
 
-todo = next(TMP.glob("Libro de Ventas - todo*.xlsx"), None)
+todo = next(TMP.glob("Vendímetro - todo*.xlsx"), None)
 ok("Excel completo creado", todo is not None)
 if todo:
     lb = load_workbook(todo)

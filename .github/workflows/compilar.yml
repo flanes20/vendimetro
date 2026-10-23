@@ -1,4 +1,4 @@
-name: Compilar Libro de Ventas
+name: Compilar Vendímetro
 
 on:
   push:
@@ -28,26 +28,26 @@ jobs:
           python pruebas/prueba_excel.py
       - name: Compilar la aplicación
         run: >
-          python -m PyInstaller --noconfirm --windowed --name "Libro de Ventas"
-          --osx-bundle-identifier com.librodeventas.app --icon icono.png
+          python -m PyInstaller --noconfirm --windowed --name "Vendímetro"
+          --osx-bundle-identifier com.vendimetro.app --icon icono.png
           --add-data "web:web" --add-data "icono.ico:." app.py
       - name: Comprobar que la aplicación compilada arranca
         run: |
-          export LIBRO_VENTAS_DATOS="$RUNNER_TEMP/datos"
-          LIBRO_VENTAS_SIN_VENTANA=1 "dist/Libro de Ventas.app/Contents/MacOS/Libro de Ventas" &
+          export VENDIMETRO_DATOS="$RUNNER_TEMP/datos"
+          VENDIMETRO_SIN_VENTANA=1 "dist/Vendímetro.app/Contents/MacOS/Vendímetro" &
           sleep 10
           curl -sf http://127.0.0.1:8765/api/info
-          curl -sf http://127.0.0.1:8765/ | grep -q "Libro de Ventas"
+          curl -sf http://127.0.0.1:8765/ | grep -q "Vendímetro"
       - name: Crear instalador (.dmg)
         run: |
           mkdir dmg
-          cp -R "dist/Libro de Ventas.app" dmg/
+          cp -R "dist/Vendímetro.app" dmg/
           ln -s /Applications dmg/Aplicaciones
           cp "Cómo usar en Mac.txt" dmg/
-          hdiutil create -volname "Libro de Ventas" -srcfolder dmg -ov -format UDZO "Libro-de-Ventas-Mac-${{ matrix.chip }}.dmg"
+          hdiutil create -volname "Vendímetro" -srcfolder dmg -ov -format UDZO "Vendimetro-Mac-${{ matrix.chip }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: Libro-de-Ventas-Mac-${{ matrix.chip }}
+          name: Vendimetro-Mac-${{ matrix.chip }}
           path: "*.dmg"
 
   windows:
@@ -63,8 +63,8 @@ jobs:
           python pruebas/prueba_e2e.py
           python pruebas/prueba_excel.py
       - name: Compilar
-        run: python -m PyInstaller --noconfirm --onefile --windowed --name "Libro de Ventas" --icon icono.ico --add-data "web;web" --add-data "icono.ico;." app.py
+        run: python -m PyInstaller --noconfirm --onefile --windowed --name "Vendímetro" --icon icono.ico --add-data "web;web" --add-data "icono.ico;." app.py
       - uses: actions/upload-artifact@v4
         with:
-          name: Libro-de-Ventas-Windows
+          name: Vendimetro-Windows
           path: dist/*.exe

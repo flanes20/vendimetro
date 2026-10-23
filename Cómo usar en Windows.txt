@@ -1,0 +1,30 @@
+VENDÍMETRO - Cómo usarlo
+========================
+
+INSTALAR
+  Copia el archivo "Vendímetro" al Escritorio. No hay que instalar nada más.
+
+ABRIR
+  Doble clic en "Vendímetro". Se abre la ventana del programa.
+  Para salir, cierra la ventana con la X, como cualquier programa.
+  Todo se guarda solo cada vez que haces algo; no hay que tocar "Guardar".
+
+  La primera vez Windows puede mostrar un aviso azul ("Windows protegió su PC").
+  Toca "Más información" y luego "Ejecutar de todas formas".
+
+PRIMEROS PASOS
+  1. Ajustes: escribe el nombre del negocio y la moneda.
+  2. Productos: carga cada producto con su costo, precio de venta y stock.
+  3. Clientes: carga los clientes que compran seguido o fiado (opcional).
+  4. Para vender, usa el botón "Nueva venta".
+  5. Anota los gastos (alquiler, luz, sueldos) en Gastos para ver la ganancia real.
+
+DÓNDE SE GUARDAN LOS DATOS
+  En Documentos > Vendímetro > ventas.db
+  Cada día que se abre el programa se guarda una copia en la carpeta "Respaldos".
+  Conviene copiar esa carpeta a un pendrive de vez en cuando.
+
+CAMBIAR DE COMPUTADORA
+  En la computadora vieja: Ajustes > Exportar datos.
+  En la nueva: abre el programa y ve a Ajustes > Importar datos.
+  (También puedes copiar la carpeta "Vendímetro" de Documentos completa.)

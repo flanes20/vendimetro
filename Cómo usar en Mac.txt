@@ -1,9 +1,9 @@
-LIBRO DE VENTAS para Mac - Cómo usarlo
-======================================
+VENDÍMETRO para Mac - Cómo usarlo
+=================================
 
 INSTALAR
-  1. Arrastra "Libro de Ventas" sobre la carpeta "Aplicaciones".
-  2. Abre Aplicaciones y haz doble clic en "Libro de Ventas".
+  1. Arrastra "Vendímetro" sobre la carpeta "Aplicaciones".
+  2. Abre Aplicaciones y haz doble clic en "Vendímetro".
 
   La primera vez la Mac dice que no puede verificar el programa.
   Es normal: el programa no está registrado en Apple.
@@ -16,7 +16,7 @@ INSTALAR
   ahí se guardan tus datos.
 
 USAR
-  Se abre como cualquier programa. Para salir: menú "Libro de Ventas" > Salir (o Cmd+Q).
+  Se abre como cualquier programa. Para salir: menú "Vendímetro" > Salir (o Cmd+Q).
   Todo se guarda solo; no hay que tocar "Guardar".
 
 PRIMEROS PASOS
@@ -27,5 +27,5 @@ PRIMEROS PASOS
   4. Anota los gastos (alquiler, luz, sueldos) para ver la ganancia real.
 
 DÓNDE SE GUARDAN LOS DATOS
-  En Documentos > Libro de Ventas > ventas.db
+  En Documentos > Vendímetro > ventas.db
   Cada día que se abre el programa se guarda una copia en la carpeta "Respaldos".

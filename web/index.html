@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Libro de Ventas</title>
+<title>Vendímetro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
@@ -291,7 +291,7 @@ dialog::backdrop { background: rgba(10, 14, 24, .5); }
 
 <div class="app">
   <aside class="side">
-    <div class="brand"><div class="logo" id="logo">LV</div><div><b id="bizName">Libro de Ventas</b><span>Gestión comercial</span></div></div>
+    <div class="brand"><div class="logo" id="logo">V</div><div><b id="bizName">Vendímetro</b><span>Gestión comercial</span></div></div>
     <nav class="nav" id="nav"></nav>
     <div class="dbstat" id="dbstat"><i class="dot"></i><span>Conectando…</span></div>
   </aside>
@@ -877,7 +877,7 @@ function postReportes() { const [a, b] = rango(); chart($("#chRep"), serie(venta
 function pgAjustes() {
   const n = negocio();
   const docs = COLS.reduce((s, c) => s + Object.keys(S.data[c]).length, 0);
-  const estado = { db: ["Base de datos conectada", `Todo se guarda automáticamente en <b class="mono small">${esc(S.info.db || "")}</b>. Cada día que abres el programa se crea una copia de seguridad automática en la carpeta Respaldos.`], sin: ["Sin conexión con la base de datos", "Abre el programa Libro de Ventas para trabajar con tus datos."], demo: ["Modo demostración", "Nada se guarda."], cargando: ["Conectando…", ""] }[S.modo];
+  const estado = { db: ["Base de datos conectada", `Todo se guarda automáticamente en <b class="mono small">${esc(S.info.db || "")}</b>. Cada día que abres el programa se crea una copia de seguridad automática en la carpeta Respaldos.`], sin: ["Sin conexión con la base de datos", "Abre el programa Vendímetro para trabajar con tus datos."], demo: ["Modo demostración", "Nada se guarda."], cargando: ["Conectando…", ""] }[S.modo];
   return `<div class="cols">
   ${card("Datos del negocio", `<form data-form="negocio" class="fgrid"><div class="fld w2"><label for="nNombre">Nombre del negocio</label><input id="nNombre" value="${esc(n.nombre || "")}" placeholder="Ej.: Almacén San Martín"></div><div class="fld"><label for="nMoneda">Símbolo de moneda</label><input id="nMoneda" value="${esc(n.moneda || "$")}" maxlength="4"></div><div class="fld"><label for="nDoc">RUT / CUIT / RFC</label><input id="nDoc" value="${esc(n.doc || "")}"></div><div class="fld w2"><label for="nDir">Dirección</label><input id="nDir" value="${esc(n.dir || "")}"></div><div class="fld"><label for="nTel">Teléfono</label><input id="nTel" value="${esc(n.tel || "")}"></div><div class="fld w2"><label for="nPie">Mensaje al pie del ticket</label><input id="nPie" value="${esc(n.pie || "¡Gracias por su compra!")}"></div><div class="row end w2"><button class="btn pri" type="submit">Guardar datos</button></div></form>`, { sub: "Aparecen en los tickets de venta" })}
   ${card("Base de datos", `<div class="row"><i class="dot ${S.modo === "db" ? "on" : S.modo === "demo" ? "demo" : ""}"></i><b>${estado[0]}</b></div><p class="muted">${estado[1]}</p>
@@ -896,9 +896,9 @@ const RENDER = { panel: [pgPanel, postPanel], pos: [pgPos, postPos], ventas: [pg
 
 /* ===================== render ===================== */
 function renderShell() {
-  const n = negocio(), nombre = n.nombre || "Libro de Ventas";
+  const n = negocio(), nombre = n.nombre || "Vendímetro";
   $("#bizName").textContent = nombre;
-  $("#logo").textContent = nombre.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "LV";
+  $("#logo").textContent = nombre.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "V";
   let g = "", nav = "";
   const nb = bajos().length;
   for (const [k, p] of Object.entries(PAGES)) {
@@ -957,7 +957,7 @@ function recuperarBorrador(b) {
   else if (S.compra.items.length) setTimeout(() => toast("Recuperamos la compra que quedó sin registrar"), 300);
 }
 function pedirCierre() {
-  abrir("¿Cerrar Libro de Ventas?", `<p>${esc(trabajoPendiente())}.</p><p class="muted">No se pierde: queda guardada y la encontrarás igual la próxima vez que abras el programa.</p>
+  abrir("¿Cerrar Vendímetro?", `<p>${esc(trabajoPendiente())}.</p><p class="muted">No se pierde: queda guardada y la encontrarás igual la próxima vez que abras el programa.</p>
     <div class="dlg-f"><button class="btn pri" data-act="cerrar">Seguir trabajando</button><button class="btn" data-act="salirPrograma">Cerrar el programa</button></div>`);
 }
 
@@ -984,7 +984,7 @@ async function seguro(fn, okMsg) {
 /* ===================== tickets ===================== */
 function ticketHTML(v) {
   const n = negocio();
-  return `<div class="receipt"><div class="c"><b>${esc(n.nombre || "Libro de Ventas")}</b></div>${n.doc ? `<div class="c">${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
+  return `<div class="receipt"><div class="c"><b>${esc(n.nombre || "Vendímetro")}</b></div>${n.doc ? `<div class="c">${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
     <div class="r"><span>Ticket ${v.folio ? "#" + v.folio : ""}</span><span>${fechaCorta(v.fecha)} ${esc(v.hora)}</span></div><div>Cliente: ${esc(nombreCli(v))}</div><hr>
     ${(v.items || []).map(i => `<div>${esc(i.nombre)}</div><div class="r"><span>  ${nf.format(i.cant)} × ${money(i.precio)}</span><span>${money(i.cant * i.precio)}</span></div>`).join("")}<hr>
     <div class="r"><span>Subtotal</span><span>${money(v.sub)}</span></div>${v.desc ? `<div class="r"><span>Descuento</span><span>−${money(v.desc)}</span></div>` : ""}
@@ -1048,7 +1048,7 @@ const ACT = {
   excelTodo: () => {
     const prods = prodsOrden().map(([, p]) => [p.codigo || "", p.nombre, p.cat || "", p.costo, p.precio, p.stock || 0, p.min ?? 5]);
     const vs = M().ventas.slice().reverse();
-    exportarExcel(`Libro de Ventas - todo ${hoy()}.xlsx`, [
+    exportarExcel(`Vendímetro - todo ${hoy()}.xlsx`, [
       hoja("Ventas", [["Folio", "Fecha", "Hora", "Cliente", "Forma de pago", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Estado", "Nota"], ...vs.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), PAGOS[v.pago] || v.pago, v.sub, v.desc, v.total, v.costo, v.total - v.costo, v.estado === "anulada" ? "Anulada" : "OK", v.nota || ""])]),
       hoja("Detalle de ventas", [["Folio", "Fecha", "Cliente", "Producto", "Categoría", "Cantidad", "Precio", "Costo", "Estado"], ...vs.flatMap(v => (v.items || []).map(i => [v.folio, v.fecha, nombreCli(v), i.nombre, i.cat || "", i.cant, i.precio, i.costo, v.estado === "anulada" ? "Anulada" : "OK"]))]),
       hoja("Productos", [["Código", "Nombre", "Categoría", "Costo", "Precio", "Stock", "Stock mínimo"], ...prods]),
@@ -1230,7 +1230,7 @@ const ACT = {
 
   // reportes y ajustes
   repTab: id => { S.repTab = id; render(); },
-  backup: () => { if (S.modo === "demo") return toast("Sal de la demostración para respaldar tus datos.", true); descargar(`respaldo-ventas-${hoy()}.json`, JSON.stringify({ app: "libro-ventas", version: 2, fecha: new Date().toISOString(), data: S.data })); },
+  backup: () => { if (S.modo === "demo") return toast("Sal de la demostración para respaldar tus datos.", true); descargar(`respaldo-vendimetro-${hoy()}.json`, JSON.stringify({ app: "vendimetro", version: 2, fecha: new Date().toISOString(), data: S.data })); },
   restaurar: () => $("#fileRestore").click(),
   respaldoYa: async () => {
     try { const r = await api("POST", "/api/respaldo"); toast("Copia de seguridad creada: " + r.archivo.split(/[\\/]/).pop()); }
@@ -1346,7 +1346,7 @@ document.addEventListener("keydown", e => {
 $("#fileRestore").addEventListener("change", async e => {
   const file = e.target.files[0]; e.target.value = ""; if (!file) return;
   let d;
-  try { d = JSON.parse(await file.text()); if (d.app !== "libro-ventas" || !d.data) throw 0; } catch (x) { return toast("El archivo no es un respaldo válido de esta aplicación.", true); }
+  try { d = JSON.parse(await file.text()); if (!["vendimetro", "libro-ventas"].includes(d.app) || !d.data) throw 0; } catch (x) { return toast("El archivo no es un respaldo válido de esta aplicación.", true); }
   const n = COLS.reduce((s, c) => s + Object.keys(d.data[c] || {}).length, 0);
   confirmar("Restaurar respaldo", `Se cargarán ${n} registros del respaldo del ${new Date(d.fecha).toLocaleString(LOC)}. Los registros con el mismo identificador se reemplazarán.`, "Restaurar", () => seguro(async () => {
     let i = 0;
@@ -1419,7 +1419,7 @@ render();
     recuperarBorrador(b);
   } catch (e) {
     S.modo = "sin";
-    $("#content").innerHTML = `<div class="card offline"><div class="card-b"><h2>El programa no está abierto</h2><p>Para usar Libro de Ventas, abre el programa con doble clic en <b>Libro de Ventas</b> (el ícono del escritorio). Se abrirá esta pantalla automáticamente.</p></div></div>`;
+    $("#content").innerHTML = `<div class="card offline"><div class="card-b"><h2>El programa no está abierto</h2><p>Para usar Vendímetro, abre el programa con doble clic en <b>Vendímetro</b> (el ícono del escritorio). Se abrirá esta pantalla automáticamente.</p></div></div>`;
     renderShell(); return;
   }
   touch(); render();

@@ -1,7 +1,7 @@
-"""Libro de Ventas: programa de escritorio con base de datos SQLite.
+"""Vendímetro: programa de escritorio con base de datos SQLite.
 
 Abre su propia ventana; por dentro, un pequeño servidor local entrega la
-pantalla y guarda los datos en Documentos\\Libro de Ventas\\ventas.db.
+pantalla y guarda los datos en Documentos\\Vendímetro\\ventas.db.
 """
 import json
 import os
@@ -20,11 +20,23 @@ RESPALDOS_A_GUARDAR = 30
 
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 WEB = BASE / "web" / "index.html"
-CARPETA = Path(os.environ.get("LIBRO_VENTAS_DATOS") or Path.home() / "Documents" / "Libro de Ventas")
+CARPETA = Path(os.environ.get("VENDIMETRO_DATOS") or Path.home() / "Documents" / "Vendímetro")
 DB_PATH = CARPETA / "ventas.db"
 RESPALDOS = CARPETA / "Respaldos"
+CARPETA_ANTERIOR = Path.home() / "Documents" / "Libro de Ventas"  # nombre del programa antes de llamarse Vendímetro
 
 bloqueo = threading.Lock()
+
+
+def migrar_carpeta_anterior():
+    """Si hay datos de la versión «Libro de Ventas», los pasa a la carpeta nueva."""
+    if os.environ.get("VENDIMETRO_DATOS") or CARPETA.exists() or not (CARPETA_ANTERIOR / "ventas.db").exists():
+        return
+    try:
+        CARPETA_ANTERIOR.rename(CARPETA)
+    except OSError:
+        import shutil
+        shutil.copytree(CARPETA_ANTERIOR, CARPETA)
 
 
 def conectar():
@@ -246,31 +258,32 @@ class ApiVentana:
 def aviso(texto):
     if sys.platform == "win32":
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, texto, "Libro de Ventas", 0x40)
+        ctypes.windll.user32.MessageBoxW(None, texto, "Vendímetro", 0x40)
     elif sys.platform == "darwin":
         texto = texto.replace("\\", "\\\\").replace('"', '\\"')
-        subprocess.run(["osascript", "-e", f'display dialog "{texto}" with title "Libro de Ventas" buttons {{"OK"}}'])
+        subprocess.run(["osascript", "-e", f'display dialog "{texto}" with title "Vendímetro" buttons {{"OK"}}'])
 
 
 if __name__ == "__main__":
     try:
         servidor = ThreadingHTTPServer(("127.0.0.1", PUERTO), Manejador)
     except OSError:
-        aviso("Libro de Ventas ya está abierto. Búscalo en la barra de tareas (en Mac, en el Dock).")
+        aviso("Vendímetro ya está abierto. Búscalo en la barra de tareas (en Mac, en el Dock).")
         sys.exit(0)
 
+    migrar_carpeta_anterior()
     CARPETA.mkdir(parents=True, exist_ok=True)
     con = conectar()
     respaldo_diario()
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
     url = f"http://127.0.0.1:{PUERTO}/"
 
-    if os.environ.get("LIBRO_VENTAS_SIN_VENTANA"):
+    if os.environ.get("VENDIMETRO_SIN_VENTANA"):
         threading.Event().wait()
 
     import webview
     api = ApiVentana()
-    ventana = webview.create_window("Libro de Ventas", url, js_api=api, width=1360, height=860, min_size=(1000, 650), maximized=True)
+    ventana = webview.create_window("Vendímetro", url, js_api=api, width=1360, height=860, min_size=(1000, 650), maximized=True)
     ventana.events.closing += lambda: api.al_cerrar(ventana)
     try:
         webview.start(private_mode=False, storage_path=str(CARPETA / ".ventana"), icon=str(BASE / "icono.ico"))
