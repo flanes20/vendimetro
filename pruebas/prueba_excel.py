@@ -48,6 +48,20 @@ def correr(w):
     w.evaluate_js("ACT.importar('productos')"); time.sleep(2); w.evaluate_js("ACT.importarOk()"); time.sleep(2)
     ok("reimportar actualiza sin duplicar", w.evaluate_js("Object.keys(S.data.productos).length") == 2)
     ok("stock actualizado a 7 con movimiento registrado", w.evaluate_js("Object.values(S.data.productos).find(p=>p.nombre==='Yerba 1 kg').stock") == 7 and w.evaluate_js("M().ajustes.some(a=>a.tipo==='conteo'&&a.delta===-5)"))
+    # clientes desde Excel: RUT sin formato se ordena, RUT inválido se rechaza, la dirección se guarda
+    wb3 = Workbook(); ws3 = wb3.active
+    ws3.append(["Nombre", "RUT", "Teléfono", "Dirección", "Comuna"])
+    ws3.append(["María Gómez", "123456785", "+56 9 1111 2222", "Los Aromos 123", "Ñuñoa"])
+    ws3.append(["RUT malo", "12.345.678-0", "", "", ""])
+    ws3.append(["Ferretería El Clavo SpA", "76.123.456-0", "", "Av. Matta 456", "Santiago"])
+    wb3.save(TMP / "clientes.xlsx"); rutas["OPEN"] = str(TMP / "clientes.xlsx")
+    w.evaluate_js("ACT.go('clientes'); ACT.importar('clientes')"); time.sleep(2)
+    plan_c = w.evaluate_js("JSON.stringify({n:importPendiente.plan.nuevos.length,e:importPendiente.plan.errores})")
+    ok("clientes: 2 nuevos y rechaza el RUT inválido", '"n":2' in plan_c and "Fila 3 (RUT malo)" in plan_c and "debería ser 5" in plan_c, plan_c)
+    w.evaluate_js("ACT.importarOk()"); time.sleep(2)
+    maria = w.evaluate_js("JSON.stringify(Object.values(S.data.clientes).find(c=>c.nombre==='María Gómez'))")
+    ok("clientes: RUT con formato y dirección guardados", '"doc":"12.345.678-5"' in maria and '"comuna":"Ñuñoa"' in maria, maria)
+
     # vender algo para que haya datos, y exportar
     pid = w.evaluate_js("Object.keys(S.data.productos)[0]")
     w.evaluate_js(f"ACT.go('pos'); ACT.posAdd('{pid}'); ACT.cobrar()"); time.sleep(2); w.evaluate_js("ACT.cerrar()")
@@ -67,6 +81,8 @@ if todo:
     ok("hojas del Excel completo", lb.sheetnames == ["Ventas", "Detalle de ventas", "Productos", "Clientes", "Compras", "Gastos"], lb.sheetnames)
     v = lb["Ventas"]
     ok("venta exportada con total numérico", v.max_row == 2 and isinstance(v["H2"].value, (int, float)), v["H2"].value)
+    c = lb["Clientes"]
+    ok("clientes exportados con RUT y dirección", [x.value for x in c[1]][:6] == ["Nombre", "RUT", "Teléfono", "Email", "Dirección", "Comuna"] and any(r[1].value == "12.345.678-5" for r in c.iter_rows(min_row=2)))
 ok("plantilla de clientes creada", (TMP / "Plantilla de clientes.xlsx").exists())
 ok("reporte por producto creado", any(TMP.glob("Por producto*.xlsx")))
 srv.shutdown()

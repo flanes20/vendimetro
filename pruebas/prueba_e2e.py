@@ -40,6 +40,16 @@ def correr(w):
     js(w, "ACT.editCli(''); $('#fcNombre').value='María Gómez'; $('#fcTel').value='555-1234'; FORM.cli(null,'');"); esperar(w)
     cid = js(w, "Object.keys(S.data.clientes)[0]")
     ok("cliente creado", bool(cid))
+    # RUT: cálculo del dígito verificador, rechazo de inválidos y duplicados, formato y dirección
+    ok("RUT: acepta válidos y rechaza inválidos", js(w, "[rut('12345678-5').ok, rut('11.111.111-1').ok, rut('76123456-0').ok, rut('12.345.678-K').ok, rut('1234').ok, rut('').ok]") == [True, True, True, False, False, True])
+    ok("RUT: dígitos verificadores", js(w, "[rutDV('12345678'), rutDV('11111111'), rutDV('76123456'), rutDV('6')]") == ["5", "1", "0", "K"], js(w, "[rutDV('12345678'), rutDV('11111111'), rutDV('76123456'), rutDV('6')]"))
+    js(w, "ACT.editCli(''); $('#fcNombre').value='Juan Pérez'; $('#fcDoc').value='12.345.678-9'; FORM.cli(null,'');"); esperar(w)
+    ok("no guarda un RUT inválido", js(w, "Object.keys(S.data.clientes).length") == 1 and js(w, "$('#dlgT').textContent") == "Nuevo cliente")
+    js(w, "$('#fcDoc').value='123456785'; $('#fcDir').value='Los Aromos 123'; $('#fcComuna').value='Ñuñoa'; FORM.cli(null,'');"); esperar(w)
+    juan = js(w, "JSON.stringify(Object.values(S.data.clientes).find(c=>c.nombre==='Juan Pérez')||null)")
+    ok("guarda RUT válido con formato y dirección", '"doc":"12.345.678-5"' in juan and '"dir":"Los Aromos 123"' in juan and '"comuna":"Ñuñoa"' in juan, juan)
+    js(w, "ACT.editCli(''); $('#fcNombre').value='Otro'; $('#fcDoc').value='12345678-5'; FORM.cli(null,''); ACT.cerrar();"); esperar(w)
+    ok("no permite dos clientes con el mismo RUT", js(w, "Object.values(S.data.clientes).filter(c=>c.doc==='12.345.678-5').length") == 1)
     # venta 1: 3 unidades, efectivo, paga con 1000
     js(w, f"ACT.go('pos'); ACT.posAdd('{pid}'); ACT.posAdd('{pid}'); ACT.posAdd('{pid}'); S.pos.recibido='1000'; ACT.cobrar();"); esperar(w, 2)
     ok("venta en efectivo registrada (ticket mostrado)", js(w, "$('#dlgT').textContent") == "Venta registrada")

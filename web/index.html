@@ -130,6 +130,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .fld > label, .lbl { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .fld .hint { font-size: 12px; color: var(--muted); }
+.fld .hint.up { color: var(--good); }
+.fld .hint.down { color: var(--crit); }
+input.mal, input.mal:focus { border-color: var(--crit); box-shadow: 0 0 0 3px var(--crit-soft); }
 .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); gap: 12px; }
 .fgrid .w2 { grid-column: span 2; }
 @media (max-width: 520px) { .fgrid .w2 { grid-column: auto; } }
@@ -318,6 +321,30 @@ function fnum(n, dec) {
   const [ent, frac] = r.toFixed(dec).split(".");
   const f = frac ? frac.replace(/0+$/, "") : "";
   return (n < 0 && r ? "-" : "") + ent.replace(/\B(?=(\d{3})+(?!\d))/g, SEP.g) + (f ? SEP.d + f : "");
+}
+/* RUT chileno: dígito verificador por módulo 11 */
+const rutLimpio = s => String(s ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
+function rutDV(cuerpo) {
+  let suma = 0, mult = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) { suma += +cuerpo[i] * mult; mult = mult === 7 ? 2 : mult + 1; }
+  const r = 11 - (suma % 11);
+  return r === 11 ? "0" : r === 10 ? "K" : String(r);
+}
+function rut(s) {
+  const c = rutLimpio(s), cuerpo = c.slice(0, -1).replace(/^0+/, ""), dv = c.slice(-1);
+  if (!c) return { vacio: true, ok: true, fmt: "" };
+  if (!/^\d{6,8}$/.test(cuerpo)) return { ok: false, msg: "El RUT está incompleto o tiene un formato incorrecto. Ejemplo: 12.345.678-5" };
+  const fmt = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv, esperado = rutDV(cuerpo);
+  if (esperado !== dv) return { ok: false, fmt, msg: `El RUT ${fmt} no es válido: el dígito verificador debería ser ${esperado}.` };
+  return { ok: true, fmt };
+}
+function rutHint(input) {
+  const h = $("#" + input.id + "Hint"); if (!h) return;
+  const r = rut(input.value);
+  h.textContent = r.vacio ? "Opcional" : r.ok ? `✓ RUT válido: ${r.fmt}` : rutLimpio(input.value).length < 8 ? "Escribe el RUT completo con su dígito verificador" : "✗ " + r.msg;
+  const mal = !r.vacio && !r.ok && rutLimpio(input.value).length >= 8;
+  h.className = "hint " + (r.vacio ? "" : r.ok ? "up" : mal ? "down" : "");
+  input.classList.toggle("mal", mal);
 }
 const nf = { format: n => fnum(n, 2) };
 const nf0 = { format: n => fnum(n, 0) };
@@ -588,7 +615,7 @@ async function exportarExcel(nombre, hojas) {
 /* ===================== importar desde Excel ===================== */
 const PLANTILLAS = {
   productos: [["Nombre", "Código", "Categoría", "Costo", "Precio", "Stock", "Stock mínimo"], ["Café molido 500 g", "7790001", "Almacén", 2800, 4500, 20, 5], ["Gaseosa cola 2,25 L", "7790002", "Bebidas", 1500, 2600, 30, 8]],
-  clientes: [["Nombre", "Teléfono", "Email", "Documento"], ["María Gómez", "11 5555 1234", "maria@correo.com", ""], ["Kiosco La Esquina", "11 5555 9876", "", "30-12345678-9"]],
+  clientes: [["Nombre", "RUT", "Teléfono", "Email", "Dirección", "Comuna"], ["María Gómez", "12.345.678-5", "+56 9 1234 5678", "maria@correo.com", "Los Aromos 123", "Ñuñoa"], ["Ferretería El Clavo SpA", "76.123.456-0", "+56 2 2345 6789", "", "Av. Matta 456, local 2", "Santiago"]],
 };
 function numX(v) {
   if (typeof v === "number") return v;
@@ -621,12 +648,16 @@ function planImport(tipo, filas) {
       if (id) cambios.push({ id, d }); else nuevos.push({ id: uid("p"), d: { costo: 0, precio: 0, stock: 0, min: 5, cat: "", codigo: "", ...d } });
     });
   } else {
-    const porNom = {}; for (const [id, c] of Object.entries(S.data.clientes)) porNom[c.nombre.toLowerCase()] = id;
+    const porNom = {}, porRut = {};
+    for (const [id, c] of Object.entries(S.data.clientes)) { porNom[c.nombre.toLowerCase()] = id; if (c.doc) porRut[rutLimpio(c.doc)] = id; }
     filas.forEach((f, i) => {
-      const nombre = txt(f.nombre || f.cliente || f.razonsocial); if (!nombre) return errores.push(`Fila ${f._fila || i + 2}: falta el nombre`);
-      const d = { nombre }, tel = txt(f.telefono || f.celular || f.tel), email = txt(f.email || f.correo), doc = txt(f.documento || f.rut || f.cuit || f.dni || f.rfc);
-      if (tel) d.tel = tel; if (email) d.email = email; if (doc) d.doc = doc;
-      const id = porNom[nombre.toLowerCase()];
+      const fila = f._fila || i + 2;
+      const nombre = txt(f.nombre || f.cliente || f.razonsocial); if (!nombre) return errores.push(`Fila ${fila}: falta el nombre`);
+      const d = { nombre }, tel = txt(f.telefono || f.celular || f.tel), email = txt(f.email || f.correo), r = rut(txt(f.rut || f.documento || f.run));
+      const dir = txt(f.direccion || f.domicilio), comuna = txt(f.comuna || f.ciudad);
+      if (!r.ok) return errores.push(`Fila ${fila} (${nombre}): ${r.msg}`);
+      if (tel) d.tel = tel; if (email) d.email = email; if (r.fmt) d.doc = r.fmt; if (dir) d.dir = dir; if (comuna) d.comuna = comuna;
+      const id = (r.fmt && porRut[rutLimpio(r.fmt)]) || porNom[nombre.toLowerCase()];
       if (id) cambios.push({ id, d }); else nuevos.push({ id: uid("c"), d });
     });
   }
@@ -795,11 +826,11 @@ function pgCompras() {
 function pgClientes() {
   const [a, b] = rango(), q = S.cliQ.trim().toLowerCase();
   const vs = M().ventas.filter(okV);
-  const rows = Object.entries(S.data.clientes).filter(([, c]) => !q || c.nombre.toLowerCase().includes(q) || (c.tel || "").includes(q)).map(([id, c]) => {
+  const rows = Object.entries(S.data.clientes).filter(([, c]) => !q || c.nombre.toLowerCase().includes(q) || (c.tel || "").includes(q) || (rutLimpio(q) && rutLimpio(c.doc).includes(rutLimpio(q))) || [c.dir, c.comuna].join(" ").toLowerCase().includes(q)).map(([id, c]) => {
     const mine = vs.filter(v => v.cli === id);
     return { id, c, per: tot(mine.filter(v => v.fecha >= a && v.fecha <= b)), hist: tot(mine), saldo: saldoCli(id), ult: mine[0]?.fecha };
   }).sort((x, y) => y.per.total - x.per.total || x.c.nombre.localeCompare(y.c.nombre));
-  CSV.clientes = [["Cliente", "Teléfono", "Email", `Compras (${etiqueta()})`, `Total (${etiqueta()})`, "Total histórico", "Saldo por cobrar", "Última compra"], ...rows.map(r => [r.c.nombre, r.c.tel || "", r.c.email || "", r.per.n, r.per.total, r.hist.total, r.saldo, r.ult || ""])];
+  CSV.clientes = [["Cliente", "RUT", "Teléfono", "Email", "Dirección", "Comuna", `Compras (${etiqueta()})`, `Total (${etiqueta()})`, "Total histórico", "Saldo por cobrar", "Última compra"], ...rows.map(r => [r.c.nombre, r.c.doc || "", r.c.tel || "", r.c.email || "", r.c.dir || "", r.c.comuna || "", r.per.n, r.per.total, r.hist.total, r.saldo, r.ult || ""])];
   let det = "";
   const sel = S.cliSel && S.data.clientes[S.cliSel];
   if (sel) {
@@ -810,10 +841,10 @@ function pgClientes() {
       <div><p class="lbl" style="margin-bottom:6px">Compras por mes · ${Y}</p><div class="chart" id="chCli"></div></div>
       ${table(["Fecha", "Productos", "Pago", "#Total"], mine.filter(v => v.fecha >= a && v.fecha <= b).map(v => `<tr class="click" data-act="verVenta" data-id="${v.fecha}|${v.id}"><td class="nw">${fechaCorta(v.fecha)}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || v.pago}</span></td><td class="n">${money(v.total)}</td></tr>`), "Sin compras en este período")}
       ${abonos.length ? `<div><p class="lbl" style="margin-bottom:6px">Pagos de cuenta corriente</p>${table(["Fecha", "Forma de pago", "#Monto"], abonos.map(x => `<tr><td>${fechaCorta(x.fecha)}</td><td>${PAGOS[x.pago] || x.pago}</td><td class="n">${money(x.monto)}</td></tr>`), "")}</div>` : ""}`,
-      { sub: esc([sel.tel, sel.email, sel.doc].filter(Boolean).join(" · ")), acts: `<button class="btn sm" data-act="abono" data-id="${id}">Registrar pago</button><button class="btn sm" data-act="editCli" data-id="${id}">Editar</button><button class="btn sm ghost" data-act="cliCerrar">Cerrar</button>`, id: "cliDet" });
+      { sub: esc([sel.doc && "RUT " + sel.doc, [sel.dir, sel.comuna].filter(Boolean).join(", "), sel.tel, sel.email].filter(Boolean).join(" · ")), acts: `<button class="btn sm" data-act="abono" data-id="${id}">Registrar pago</button><button class="btn sm" data-act="editCli" data-id="${id}">Editar</button><button class="btn sm ghost" data-act="cliCerrar">Cerrar</button>`, id: "cliDet" });
   }
   return det + card("Clientes", `<div class="row" style="padding:14px 18px 0"><input id="cliQ" type="search" placeholder="Buscar cliente" value="${esc(S.cliQ)}" style="max-width:300px"></div>
-    ${table(["Cliente", "Teléfono", "#Compras", `#Total del período`, "#Total histórico", "#Por cobrar", "Última compra"], rows.map(r => `<tr class="click${S.cliSel === r.id ? " sel" : ""}" data-act="cliSel" data-id="${r.id}"><td><b>${esc(r.c.nombre)}</b></td><td class="nw">${esc(r.c.tel || "—")}</td><td class="n">${r.per.n}</td><td class="n">${money(r.per.total)}</td><td class="n">${money(r.hist.total)}</td><td class="n">${r.saldo > 0.009 ? `<span class="chip low">${money(r.saldo)}</span>` : `<span class="muted">—</span>`}</td><td class="nw">${r.ult ? fechaCorta(r.ult) : "—"}</td></tr>`), Object.keys(S.data.clientes).length ? "Ningún cliente coincide" : "Todavía no hay clientes. Agrega el primero.")}`,
+    ${table(["Cliente", "Teléfono", "#Compras", `#Total del período`, "#Total histórico", "#Por cobrar", "Última compra"], rows.map(r => `<tr class="click${S.cliSel === r.id ? " sel" : ""}" data-act="cliSel" data-id="${r.id}"><td class="prodname"><b>${esc(r.c.nombre)}</b><span>${esc([r.c.doc && "RUT " + r.c.doc, r.c.comuna].filter(Boolean).join(" · "))}</span></td><td class="nw">${esc(r.c.tel || "—")}</td><td class="n">${r.per.n}</td><td class="n">${money(r.per.total)}</td><td class="n">${money(r.hist.total)}</td><td class="n">${r.saldo > 0.009 ? `<span class="chip low">${money(r.saldo)}</span>` : `<span class="muted">—</span>`}</td><td class="nw">${r.ult ? fechaCorta(r.ult) : "—"}</td></tr>`), Object.keys(S.data.clientes).length ? "Ningún cliente coincide" : "Todavía no hay clientes. Agrega el primero.")}`,
     { flush: true, sub: `Período: ${etiqueta()}`, acts: `<button class="btn sm" data-act="importar" data-id="clientes">Importar desde Excel</button><button class="btn sm ghost" data-act="plantilla" data-id="clientes">Plantilla</button>${csvBtn("clientes")}<button class="btn sm pri" data-act="editCli" data-id="">${ico("plus")}Nuevo cliente</button>` });
 }
 function postClientes() {
@@ -887,7 +918,7 @@ function pgAjustes() {
   const estado = { db: ["Base de datos conectada", `Todo se guarda automáticamente en <b class="mono small">${esc(S.info.db || "")}</b>. Cada día que abres el programa se crea una copia de seguridad automática en la carpeta Respaldos.`], sin: ["Sin conexión con la base de datos", "Abre el programa Vendímetro para trabajar con tus datos."], demo: ["Modo demostración", "Nada se guarda."], cargando: ["Conectando…", ""] }[S.modo];
   return `<div class="cols">
   ${card("Apariencia", `<div class="row between"><span>Colores del programa</span><div class="seg"><button data-act="tema" data-id="oscuro" aria-pressed="${n.tema !== "claro"}">Oscuro</button><button data-act="tema" data-id="claro" aria-pressed="${n.tema === "claro"}">Claro</button></div></div>`)}
-  ${card("Datos del negocio", `<form data-form="negocio" class="fgrid"><div class="fld w2"><label for="nNombre">Nombre del negocio</label><input id="nNombre" value="${esc(n.nombre || "")}" placeholder="Ej.: Almacén San Martín"></div><div class="fld"><label for="nMoneda">Símbolo de moneda</label><input id="nMoneda" value="${esc(n.moneda || "$")}" maxlength="4"></div><div class="fld"><label for="nDoc">RUT / CUIT / RFC</label><input id="nDoc" value="${esc(n.doc || "")}"></div><div class="fld w2"><label for="nDir">Dirección</label><input id="nDir" value="${esc(n.dir || "")}"></div><div class="fld"><label for="nTel">Teléfono</label><input id="nTel" value="${esc(n.tel || "")}"></div><div class="fld w2"><label for="nPie">Mensaje al pie del ticket</label><input id="nPie" value="${esc(n.pie || "¡Gracias por su compra!")}"></div><div class="row end w2"><button class="btn pri" type="submit">Guardar datos</button></div></form>`, { sub: "Aparecen en los tickets de venta" })}
+  ${card("Datos del negocio", `<form data-form="negocio" class="fgrid"><div class="fld w2"><label for="nNombre">Nombre del negocio</label><input id="nNombre" value="${esc(n.nombre || "")}" placeholder="Ej.: Almacén San Martín"></div><div class="fld"><label for="nMoneda">Símbolo de moneda</label><input id="nMoneda" value="${esc(n.moneda || "$")}" maxlength="4"></div><div class="fld"><label for="nDoc">RUT del negocio</label><input id="nDoc" value="${esc(n.doc || "")}" placeholder="76.123.456-0" autocomplete="off"><span class="hint" id="nDocHint">${n.doc ? "✓ RUT válido" : "Opcional"}</span></div><div class="fld w2"><label for="nDir">Dirección</label><input id="nDir" value="${esc(n.dir || "")}"></div><div class="fld"><label for="nTel">Teléfono</label><input id="nTel" value="${esc(n.tel || "")}"></div><div class="fld w2"><label for="nPie">Mensaje al pie del ticket</label><input id="nPie" value="${esc(n.pie || "¡Gracias por su compra!")}"></div><div class="row end w2"><button class="btn pri" type="submit">Guardar datos</button></div></form>`, { sub: "Aparecen en los tickets de venta" })}
   ${card("Base de datos", `<div class="row"><i class="dot ${S.modo === "db" ? "on" : S.modo === "demo" ? "demo" : ""}"></i><b>${estado[0]}</b></div><p class="muted">${estado[1]}</p>
     <div class="kpis">${kpi("Productos", nf0.format(Object.keys(S.data.productos).length))}${kpi("Clientes", nf0.format(Object.keys(S.data.clientes).length))}${kpi("Ventas", nf0.format(M().ventas.length))}${kpi("Registros", nf0.format(docs))}</div>
     <div><p class="lbl">Copias de seguridad</p><p class="muted small">Crea una copia ahora (queda en la carpeta Respaldos) o exporta tus datos a un archivo para guardarlo en un pendrive. Si algún día cambias de computadora, instala el programa y usa «Importar datos».</p></div>
@@ -999,8 +1030,8 @@ async function seguro(fn, okMsg) {
 /* ===================== tickets ===================== */
 function ticketHTML(v) {
   const n = negocio();
-  return `<div class="receipt"><div class="c"><b>${esc(n.nombre || "Vendímetro")}</b></div>${n.doc ? `<div class="c">${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
-    <div class="r"><span>Ticket ${v.folio ? "#" + v.folio : ""}</span><span>${fechaCorta(v.fecha)} ${esc(v.hora)}</span></div><div>Cliente: ${esc(nombreCli(v))}</div><hr>
+  return `<div class="receipt"><div class="c"><b>${esc(n.nombre || "Vendímetro")}</b></div>${n.doc ? `<div class="c">RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
+    <div class="r"><span>Ticket ${v.folio ? "#" + v.folio : ""}</span><span>${fechaCorta(v.fecha)} ${esc(v.hora)}</span></div><div>Cliente: ${esc(nombreCli(v))}</div>${(() => { const c = S.data.clientes[v.cli]; if (!c) return ""; const dir = [c.dir, c.comuna].filter(Boolean).join(", "); return (c.doc ? `<div>RUT: ${esc(c.doc)}</div>` : "") + (dir ? `<div>Dirección: ${esc(dir)}</div>` : ""); })()}<hr>
     ${(v.items || []).map(i => `<div>${esc(i.nombre)}</div><div class="r"><span>  ${nf.format(i.cant)} × ${money(i.precio)}</span><span>${money(i.cant * i.precio)}</span></div>`).join("")}<hr>
     <div class="r"><span>Subtotal</span><span>${money(v.sub)}</span></div>${v.desc ? `<div class="r"><span>Descuento</span><span>−${money(v.desc)}</span></div>` : ""}
     <div class="r tot"><span>TOTAL</span><span>${money(v.total)}</span></div><div class="r"><span>Pago</span><span>${PAGOS[v.pago] || v.pago}</span></div>
@@ -1067,7 +1098,7 @@ const ACT = {
       hoja("Ventas", [["Folio", "Fecha", "Hora", "Cliente", "Forma de pago", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Estado", "Nota"], ...vs.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), PAGOS[v.pago] || v.pago, v.sub, v.desc, v.total, v.costo, v.total - v.costo, v.estado === "anulada" ? "Anulada" : "OK", v.nota || ""])]),
       hoja("Detalle de ventas", [["Folio", "Fecha", "Cliente", "Producto", "Categoría", "Cantidad", "Precio", "Costo", "Estado"], ...vs.flatMap(v => (v.items || []).map(i => [v.folio, v.fecha, nombreCli(v), i.nombre, i.cat || "", i.cant, i.precio, i.costo, v.estado === "anulada" ? "Anulada" : "OK"]))]),
       hoja("Productos", [["Código", "Nombre", "Categoría", "Costo", "Precio", "Stock", "Stock mínimo"], ...prods]),
-      hoja("Clientes", [["Nombre", "Teléfono", "Email", "Documento", "Saldo por cobrar"], ...Object.entries(S.data.clientes).map(([id, c]) => [c.nombre, c.tel || "", c.email || "", c.doc || "", saldoCli(id)])]),
+      hoja("Clientes", [["Nombre", "RUT", "Teléfono", "Email", "Dirección", "Comuna", "Saldo por cobrar"], ...Object.entries(S.data.clientes).map(([id, c]) => [c.nombre, c.doc || "", c.tel || "", c.email || "", c.dir || "", c.comuna || "", saldoCli(id)])]),
       hoja("Compras", [["Fecha", "Proveedor", "Producto", "Cantidad", "Costo", "Total", "Nota"], ...M().compras.slice().reverse().flatMap(c => c.items.map(i => [c.fecha, S.data.proveedores[c.prov]?.nombre || "", i.nombre, i.cant, i.costo, i.cant * i.costo, c.nota || ""]))]),
       hoja("Gastos", [["Fecha", "Categoría", "Descripción", "Forma de pago", "Monto"], ...M().gastos.slice().reverse().map(g => [g.fecha, g.cat, g.desc || "", PAGOS[g.pago] || "", g.monto])]),
     ]);
@@ -1230,8 +1261,14 @@ const ACT = {
   cliCerrar: () => { S.cliSel = null; render(); },
   editCli: id => {
     const c = id ? S.data.clientes[id] : {};
-    abrir(id ? "Editar cliente" : "Nuevo cliente", `<form data-form="cli" data-id="${id}" class="fgrid"><div class="fld w2"><label for="fcNombre">Nombre o razón social</label><input id="fcNombre" required value="${esc(c.nombre || "")}"></div><div class="fld"><label for="fcTel">Teléfono</label><input id="fcTel" inputmode="tel" value="${esc(c.tel || "")}"></div><div class="fld"><label for="fcEmail">Email</label><input id="fcEmail" type="email" value="${esc(c.email || "")}"></div><div class="fld"><label for="fcDoc">Documento / RUT</label><input id="fcDoc" value="${esc(c.doc || "")}"></div>
+    abrir(id ? "Editar cliente" : "Nuevo cliente", `<form data-form="cli" data-id="${id}" class="fgrid"><div class="fld w2"><label for="fcNombre">Nombre o razón social</label><input id="fcNombre" required value="${esc(c.nombre || "")}"></div>
+      <div class="fld"><label for="fcDoc">RUT</label><input id="fcDoc" value="${esc(c.doc || "")}" placeholder="12.345.678-5" autocomplete="off"><span class="hint" id="fcDocHint">Opcional</span></div>
+      <div class="fld"><label for="fcTel">Teléfono</label><input id="fcTel" inputmode="tel" value="${esc(c.tel || "")}" placeholder="+56 9 1234 5678"></div>
+      <div class="fld w2"><label for="fcDir">Dirección</label><input id="fcDir" value="${esc(c.dir || "")}" placeholder="Calle, número, depto."></div>
+      <div class="fld"><label for="fcComuna">Comuna</label><input id="fcComuna" value="${esc(c.comuna || "")}"></div>
+      <div class="fld"><label for="fcEmail">Email</label><input id="fcEmail" type="email" value="${esc(c.email || "")}"></div>
       <div class="dlg-f" style="grid-column:1/-1">${id ? `<button type="button" class="btn dan" data-act="delCli" data-id="${id}" style="margin-right:auto">Eliminar</button>` : ""}<button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Guardar</button></div></form>`);
+    rutHint($("#fcDoc"));
   },
   delCli: id => confirmar("Eliminar cliente", `¿Eliminar a <b>${esc(S.data.clientes[id]?.nombre)}</b>? Sus compras pasadas se conservan en los reportes.`, "Eliminar", () => seguro(async () => { await borrar("clientes", id); if (S.cliSel === id) S.cliSel = null; }, "Cliente eliminado")),
   abono: id => {
@@ -1292,7 +1329,13 @@ const FORM = {
     if (await seguro(() => guardar("proveedores", id || uid("s"), d), "Proveedor guardado")) cerrar();
   },
   cli: async (f, id) => {
-    const d = { ...(id ? S.data.clientes[id] : {}), nombre: $("#fcNombre").value.trim(), tel: $("#fcTel").value.trim(), email: $("#fcEmail").value.trim(), doc: $("#fcDoc").value.trim() };
+    const r = rut($("#fcDoc").value);
+    if (!r.ok) { rutHint($("#fcDoc")); $("#fcDoc").focus(); return toast(r.msg, true); }
+    if (r.fmt) {
+      const otro = Object.entries(S.data.clientes).find(([cid, c]) => cid !== id && rutLimpio(c.doc) === rutLimpio(r.fmt));
+      if (otro) { $("#fcDoc").focus(); return toast(`Ya hay un cliente con el RUT ${r.fmt}: ${otro[1].nombre}.`, true); }
+    }
+    const d = { ...(id ? S.data.clientes[id] : {}), nombre: $("#fcNombre").value.trim(), doc: r.fmt, tel: $("#fcTel").value.trim(), dir: $("#fcDir").value.trim(), comuna: $("#fcComuna").value.trim(), email: $("#fcEmail").value.trim() };
     if (await seguro(() => guardar("clientes", id || uid("c"), d), "Cliente guardado")) cerrar();
   },
   abono: async (f, id) => {
@@ -1307,7 +1350,9 @@ const FORM = {
     if (await seguro(() => agregarALista("gastos", fecha.slice(0, 7), g), `Gasto de ${money(monto)} registrado`)) { $("#gDesc").value = ""; $("#gMonto").value = ""; }
   },
   negocio: async () => {
-    const d = { ...negocio(), nombre: $("#nNombre").value.trim(), moneda: $("#nMoneda").value.trim() || "$", doc: $("#nDoc").value.trim(), dir: $("#nDir").value.trim(), tel: $("#nTel").value.trim(), pie: $("#nPie").value.trim() };
+    const r = rut($("#nDoc").value);
+    if (!r.ok) { rutHint($("#nDoc")); $("#nDoc").focus(); return toast(r.msg, true); }
+    const d = { ...negocio(), nombre: $("#nNombre").value.trim(), moneda: $("#nMoneda").value.trim() || "$", doc: r.fmt, dir: $("#nDir").value.trim(), tel: $("#nTel").value.trim(), pie: $("#nPie").value.trim() };
     await seguro(() => guardar("config", "negocio", d), "Datos del negocio guardados");
   },
 };
@@ -1332,6 +1377,7 @@ document.addEventListener("input", e => {
     if (n >= 1) { it.cant = Math.min(n, p?.stock || 0); if (n > (p?.stock || 0)) toast(`Solo hay ${nf.format(p?.stock || 0)} en stock.`, true); posTotals(); }
   }
   else if (id === "fpCosto" || id === "fpPrecio") margenHint();
+  else if (id === "fcDoc" || id === "nDoc") rutHint(t);
   else if (id === "prodQ") { S.prodQ = t.value; renderSoon(); }
   else if (id === "ventaQ") { S.ventaQ = t.value; renderSoon(); }
   else if (id === "cliQ") { S.cliQ = t.value; renderSoon(); }
@@ -1343,6 +1389,7 @@ document.addEventListener("change", e => {
   else if (id === "perAnio") { P.y = +t.value; render(); }
   else if (id === "perDesde") { if (t.value) { P.desde = t.value; render(); } }
   else if (id === "perHasta") { if (t.value) { P.hasta = t.value; render(); } }
+  else if ((id === "fcDoc" || id === "nDoc") && rut(t.value).ok) { t.value = rut(t.value).fmt; rutHint(t); }
   else if (id === "posCli") S.pos.cli = t.value;
   else if (id === "posFecha") S.pos.fecha = t.value;
   else if (t.dataset.cant != null) posTicket();
@@ -1377,7 +1424,11 @@ function demoData() {
   d.config.negocio = { nombre: "Almacén Demo", moneda: "$", pie: "¡Gracias por su compra!" };
   const prods = [["Café molido 500 g", "Almacén", 2800, 4500], ["Yerba mate 1 kg", "Almacén", 1900, 3100], ["Galletitas surtidas", "Almacén", 650, 1200], ["Aceite girasol 1,5 L", "Almacén", 2100, 3300], ["Leche entera 1 L", "Lácteos", 720, 1100], ["Queso cremoso kg", "Lácteos", 5200, 7900], ["Yogur bebible", "Lácteos", 600, 1050], ["Gaseosa cola 2,25 L", "Bebidas", 1500, 2600], ["Agua mineral 2 L", "Bebidas", 500, 950], ["Cerveza lata 473 ml", "Bebidas", 900, 1600], ["Detergente 750 ml", "Limpieza", 1100, 1900], ["Lavandina 2 L", "Limpieza", 700, 1250], ["Pan francés kg", "Panadería", 1200, 2200], ["Medialunas x6", "Panadería", 1400, 2800]];
   prods.forEach(([n, c, co, pr], i) => d.productos["dp" + i] = { nombre: n, cat: c, codigo: "779" + (100200 + i * 37), costo: co, precio: pr, stock: [40, 6, 55, 18, 3, 9, 24, 30, 0, 48, 14, 20, 12, 8][i], min: 8 });
-  ["Ana Torres", "Carlos Méndez", "Kiosco La Esquina", "Bar El Puerto", "Lucía Fernández", "Jorge Ruiz"].forEach((n, i) => d.clientes["dc" + i] = { nombre: n, tel: `11 5${300 + i * 17} ${4400 + i * 131}` });
+  const calles = [["Los Aromos 123", "Ñuñoa"], ["Av. Pajaritos 2450", "Maipú"], ["San Diego 980", "Santiago"], ["Av. Perú 615", "Viña del Mar"], ["Pasaje Las Rosas 44", "La Florida"], ["Gran Avenida 5120", "San Miguel"]];
+  ["Ana Torres", "Carlos Méndez", "Kiosco La Esquina", "Bar El Puerto", "Lucía Fernández", "Jorge Ruiz"].forEach((n, i) => {
+    const cuerpo = String(i === 2 || i === 3 ? 76100000 + i * 23457 : 12000000 + i * 1234567);
+    d.clientes["dc" + i] = { nombre: n, doc: rut(cuerpo + rutDV(cuerpo)).fmt, tel: `+56 9 ${5300 + i * 17} ${4400 + i * 131}`, dir: calles[i][0], comuna: calles[i][1] };
+  });
   ["Distribuidora Norte", "Lácteos del Valle", "Bebidas Sur SA"].forEach((n, i) => d.proveedores["ds" + i] = { nombre: n, contacto: ["Pablo", "Marta", "Diego"][i], tel: `11 4${200 + i * 11} 99${10 + i}` });
   const fin = new Date(), ini = new Date(fin.getFullYear() - 1, 0, 1);
   let folio = 0;
