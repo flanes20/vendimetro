@@ -96,6 +96,11 @@ class Manejador(BaseHTTPRequestHandler):
         ruta = self.path.split("?")[0]
         if ruta in ("/", "/index.html"):
             return self.responder(200, WEB.read_bytes(), "text/html; charset=utf-8")
+        if ruta.startswith("/fonts/"):
+            archivo = WEB.parent / "fonts" / Path(unquote(ruta)).name
+            tipos = {".woff2": "font/woff2", ".css": "text/css; charset=utf-8"}
+            if archivo.suffix in tipos and archivo.is_file():
+                return self.responder(200, archivo.read_bytes(), tipos[archivo.suffix])
         if ruta == "/api/all":
             with bloqueo:
                 filas = con.execute("SELECT col, id, data FROM docs").fetchall()
