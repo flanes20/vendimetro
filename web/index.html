@@ -148,10 +148,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); outline
 .cols.c-wide { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 @media (max-width: 1100px) { .cols.c-wide { grid-template-columns: 1fr; } }
 
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: 14px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .kpi .k { font-size: 12px; font-weight: 600; color: var(--muted); }
-.kpi .v { font-family: var(--f-display); font-size: 25px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.kpi .v { font-family: var(--f-display); font-size: 23px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .kpi .s { font-size: 12.5px; color: var(--muted); }
 .kpi.feat { background: var(--side); border-color: var(--side); }
 .kpi.feat .k, .kpi.feat .s { color: var(--side-muted); }
@@ -311,8 +311,16 @@ const MES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov"
 const PAGOS = { efectivo: "Efectivo", debito: "Débito", credito: "Crédito", transferencia: "Transferencia", fiado: "Fiado" };
 const CAT_GASTO = ["Alquiler", "Servicios (luz, agua, internet)", "Sueldos", "Impuestos", "Transporte", "Publicidad", "Mantenimiento", "Comisiones bancarias", "Otros"];
 const LOC = (navigator.language || "").startsWith("es") ? navigator.language : "es-AR";
-const nf = new Intl.NumberFormat(LOC, { maximumFractionDigits: 2 });
-const nf0 = new Intl.NumberFormat(LOC, { maximumFractionDigits: 0 });
+// Separadores del idioma, pero agrupando siempre los miles ("4.500", no "4500" como hace el español por defecto).
+const SEP = (() => { try { const p = new Intl.NumberFormat(LOC).formatToParts(1234567.5); return { g: p.find(x => x.type === "group")?.value || ".", d: p.find(x => x.type === "decimal")?.value || "," }; } catch (e) { return { g: ".", d: "," }; } })();
+function fnum(n, dec) {
+  const r = Math.round(Math.abs(n) * 10 ** dec) / 10 ** dec;
+  const [ent, frac] = r.toFixed(dec).split(".");
+  const f = frac ? frac.replace(/0+$/, "") : "";
+  return (n < 0 && r ? "-" : "") + ent.replace(/\B(?=(\d{3})+(?!\d))/g, SEP.g) + (f ? SEP.d + f : "");
+}
+const nf = { format: n => fnum(n, 2) };
+const nf0 = { format: n => fnum(n, 0) };
 const nfc = new Intl.NumberFormat(LOC, { notation: "compact", maximumFractionDigits: 1 });
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
