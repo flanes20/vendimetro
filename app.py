@@ -3,12 +3,18 @@
 Abre su propia ventana; por dentro, un pequeño servidor local entrega la
 pantalla y guarda los datos en Documentos\\Vendímetro\\ventas.db.
 """
+import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +23,7 @@ from urllib.parse import unquote
 PUERTO = 8765
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
+DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
 
 BASE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
 WEB = BASE / "web" / "index.html"
@@ -72,6 +79,71 @@ def respaldo_diario():
         respaldar("auto")
 
 
+def leer_doc(col, id_):
+    with bloqueo:
+        fila = con.execute("SELECT data FROM docs WHERE col = ? AND id = ?", (col, id_)).fetchone()
+    return json.loads(fila[0]) if fila else None
+
+
+def escribir_doc(col, id_, data):
+    with bloqueo:
+        con.execute(
+            "INSERT INTO docs (col, id, data, actualizado) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(col, id) DO UPDATE SET data = excluded.data, actualizado = excluded.actualizado",
+            (col, id_, json.dumps(data, ensure_ascii=False), datetime.now().isoformat(timespec="seconds")),
+        )
+        con.commit()
+
+
+def hash_pin(pin, sal):
+    return hashlib.pbkdf2_hmac("sha256", pin.encode("utf-8"), bytes.fromhex(sal), 200_000).hex()
+
+
+def pin_correcto(pin):
+    admin = leer_doc(*DOC_ADMIN)
+    return bool(admin) and hmac.compare_digest(hash_pin(str(pin), admin["sal"]), admin["hash"])
+
+
+def pin_valido(pin):
+    return isinstance(pin, str) and re.fullmatch(r"\d{4,8}", pin) is not None
+
+
+def operar_pin(cuerpo):
+    """estado / verificar / definir el código de administrador. Se guarda cifrado (PBKDF2)."""
+    accion = cuerpo.get("accion")
+    definido = leer_doc(*DOC_ADMIN) is not None
+    if accion == "estado":
+        return {"definido": definido}
+    if accion == "verificar":
+        ok = definido and pin_correcto(cuerpo.get("pin", ""))
+        if not ok:
+            time.sleep(0.6)  # frena los intentos a ciegas
+        return {"ok": ok}
+    if accion == "definir":
+        if definido and not pin_correcto(cuerpo.get("actual", "")):
+            time.sleep(0.6)
+            return {"ok": False, "error": "El código actual no es correcto."}
+        nuevo = cuerpo.get("nuevo", "")
+        if not pin_valido(nuevo):
+            return {"ok": False, "error": "El código debe tener entre 4 y 8 números."}
+        sal = secrets.token_hex(16)
+        escribir_doc(*DOC_ADMIN, {"sal": sal, "hash": hash_pin(nuevo, sal)})
+        return {"ok": True}
+    return {"ok": False, "error": "Acción desconocida."}
+
+
+def imprimir_en_navegador(html, nombre):
+    """En Mac la ventana del programa no imprime: se abre la venta en el navegador, que sí lo hace."""
+    carpeta = Path(tempfile.gettempdir()) / "vendimetro-impresion"
+    carpeta.mkdir(exist_ok=True)
+    archivo = carpeta / (re.sub(r"[^\w-]", "_", nombre) + ".html")
+    archivo.write_text(html, encoding="utf-8")
+    if not os.environ.get("VENDIMETRO_SIN_NAVEGADOR"):
+        import webbrowser
+        webbrowser.open(archivo.as_uri())
+    return archivo
+
+
 class Manejador(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -92,6 +164,13 @@ class Manejador(BaseHTTPRequestHandler):
             return partes[2], partes[3]
         return None
 
+    def leer_json(self):
+        largo = int(self.headers.get("Content-Length", 0) or 0)
+        data = json.loads(self.rfile.read(largo).decode("utf-8")) if largo else {}
+        if not isinstance(data, dict):
+            raise ValueError
+        return data
+
     def do_GET(self):
         ruta = self.path.split("?")[0]
         if ruta in ("/", "/index.html"):
@@ -106,42 +185,47 @@ class Manejador(BaseHTTPRequestHandler):
                 filas = con.execute("SELECT col, id, data FROM docs").fetchall()
             datos = {c: {} for c in COLECCIONES}
             for col, id_, data in filas:
-                datos.setdefault(col, {})[id_] = json.loads(data)
+                if (col, id_) != DOC_ADMIN:
+                    datos.setdefault(col, {})[id_] = json.loads(data)
             return self.responder(200, datos)
         if ruta == "/api/info":
-            return self.responder(200, {"db": str(DB_PATH), "respaldos": str(RESPALDOS)})
+            return self.responder(200, {"db": str(DB_PATH), "respaldos": str(RESPALDOS), "plataforma": sys.platform})
         self.responder(404, {"error": "no encontrado"})
 
     def do_PUT(self):
         doc = self.ruta_doc()
         if not doc:
             return self.responder(404, {"error": "no encontrado"})
+        if doc == DOC_ADMIN:
+            return self.responder(403, {"error": "protegido"})
         try:
-            largo = int(self.headers.get("Content-Length", 0))
-            data = json.loads(self.rfile.read(largo).decode("utf-8"))
-            if not isinstance(data, dict):
-                raise ValueError
+            data = self.leer_json()
         except (ValueError, UnicodeDecodeError):
             return self.responder(400, {"error": "datos inválidos"})
-        with bloqueo:
-            con.execute(
-                "INSERT INTO docs (col, id, data, actualizado) VALUES (?, ?, ?, ?)"
-                " ON CONFLICT(col, id) DO UPDATE SET data = excluded.data, actualizado = excluded.actualizado",
-                (doc[0], doc[1], json.dumps(data, ensure_ascii=False), datetime.now().isoformat(timespec="seconds")),
-            )
-            con.commit()
+        escribir_doc(doc[0], doc[1], data)
         self.responder(200, {"ok": True})
 
     def do_DELETE(self):
         doc = self.ruta_doc()
         if not doc:
             return self.responder(404, {"error": "no encontrado"})
+        if doc == DOC_ADMIN:
+            return self.responder(403, {"error": "protegido"})
         with bloqueo:
             con.execute("DELETE FROM docs WHERE col = ? AND id = ?", doc)
             con.commit()
         self.responder(200, {"ok": True})
 
     def do_POST(self):
+        if self.path in ("/api/pin", "/api/imprimir"):
+            try:
+                cuerpo = self.leer_json()
+            except (ValueError, UnicodeDecodeError):
+                return self.responder(400, {"error": "datos inválidos"})
+            if self.path == "/api/pin":
+                return self.responder(200, operar_pin(cuerpo))
+            archivo = imprimir_en_navegador(str(cuerpo.get("html", "")), str(cuerpo.get("nombre", "venta")))
+            return self.responder(200, {"ok": True, "archivo": str(archivo)})
         if self.path == "/api/respaldo":
             try:
                 destino = respaldar("manual")

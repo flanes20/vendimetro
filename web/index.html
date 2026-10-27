@@ -237,6 +237,11 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--line); border-bottom: 0
 .qty button { width: 28px; height: 28px; border: 0; background: var(--surface-2); cursor: pointer; font-size: 15px; }
 .qty input { width: 44px; border: 0; border-radius: 0; text-align: center; padding: 4px 2px; box-shadow: none !important; }
 .line .tt { font-weight: 600; text-align: right; min-width: 78px; }
+.line .pu { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.line .pu s { opacity: .7; }
+.lnk { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 3px; }
+.lnk:hover { text-decoration: underline; }
+.lnk svg, .btn.sm svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .line .x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 0 4px; }
 .totals { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
 .totals dt { color: var(--muted); } .totals dd { margin: 0; text-align: right; font-weight: 500; }
@@ -379,6 +384,8 @@ const ICON = {
   ajustes: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   dl: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  print: '<path d="M7 9V3h10v6M7 17H4v-7h16v7h-3M7 14h10v7H7z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 };
 const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
 
@@ -763,9 +770,19 @@ function posGrid() {
   $("#posGrid").innerHTML = list.map(([id, p]) => `<button class="pcard" data-act="posAdd" data-id="${id}"${(p.stock || 0) <= 0 ? " disabled" : ""}><span class="nm">${esc(p.nombre)}</span><span class="meta"><span>${esc(p.codigo || p.cat || "")}</span>${stockChip(p)}</span><span class="pr">${money(p.precio)}</span></button>`).join("")
     || `<p class="empty" style="grid-column:1/-1">${Object.keys(S.data.productos).length ? "Ningún producto coincide con la búsqueda" : "Primero carga productos en la sección Productos"}</p>`;
 }
+function etiquetaPrecio(it, p) {
+  if (!p || it.precio === p.precio) return "";
+  const esp = S.data.clientes[S.pos.cli]?.precios?.[it.pid];
+  return esp != null && esp === it.precio ? `<span class="chip acc">Precio especial</span>` : `<span class="chip low">Precio cambiado</span>`;
+}
+function precioHint(pid) {
+  const p = S.data.productos[pid], v = num($("#ppPrecio")?.value), h = $("#ppHint"); if (!h || !p) return;
+  if (v < p.costo) { h.textContent = `Por debajo del costo: pierdes ${money(p.costo - v)} por unidad.`; h.className = "hint down"; }
+  else { h.textContent = `Ganas ${money(v - p.costo)} por unidad${v !== p.precio ? ` (${v < p.precio ? "−" : "+"}${money(Math.abs(p.precio - v))} vs. el precio normal)` : ""}.`; h.className = "hint"; }
+}
 function posTicket() {
   const ps = S.pos;
-  $("#posLines").innerHTML = ps.items.map((it, i) => { const p = S.data.productos[it.pid]; return `<div class="line"><div style="min-width:0"><div class="nm">${esc(p?.nombre || "Producto borrado")}</div><div class="pu">${money(it.precio)} c/u</div></div><div class="qty"><button data-act="posQ" data-id="${i}|-1" aria-label="Quitar uno">−</button><input id="posCant${i}" data-cant="${i}" type="number" min="1" step="1" value="${it.cant}" aria-label="Cantidad"><button data-act="posQ" data-id="${i}|1" aria-label="Agregar uno">+</button></div><div class="row" style="gap:2px"><span class="tt">${money(it.cant * it.precio)}</span><button class="x" data-act="posDel" data-id="${i}" aria-label="Quitar">×</button></div></div>`; }).join("")
+  $("#posLines").innerHTML = ps.items.map((it, i) => { const p = S.data.productos[it.pid]; return `<div class="line"><div style="min-width:0"><div class="nm">${esc(p?.nombre || "Producto borrado")}</div><div class="pu">${it.precio !== p?.precio && p ? `<s>${money(p.precio)}</s> ` : ""}${money(it.precio)} c/u ${etiquetaPrecio(it, p)} <button class="lnk" data-act="posPrecio" data-id="${i}" title="Requiere código de administrador">${ico("lock")}Cambiar precio</button></div></div><div class="qty"><button data-act="posQ" data-id="${i}|-1" aria-label="Quitar uno">−</button><input id="posCant${i}" data-cant="${i}" type="number" min="1" step="1" value="${it.cant}" aria-label="Cantidad"><button data-act="posQ" data-id="${i}|1" aria-label="Agregar uno">+</button></div><div class="row" style="gap:2px"><span class="tt">${money(it.cant * it.precio)}</span><button class="x" data-act="posDel" data-id="${i}" aria-label="Quitar">×</button></div></div>`; }).join("")
     || `<p class="empty">Toca un producto para agregarlo</p>`;
   posTotals();
 }
@@ -787,7 +804,7 @@ function pgVentas() {
   return `<div class="kpis">${kpi("Ventas", money(ok.total), delta(ok.total, prev.total, etiquetaPrev()), "feat")}${kpi("Ganancia bruta", money(ok.ganancia), `margen ${pct(ok.total ? ok.ganancia / ok.total * 100 : NaN)}`)}${kpi("Nº de ventas", nf0.format(ok.n), `${list.length - ok.n} anuladas`)}${kpi("Ticket promedio", money(ok.ticket))}${kpi("Descuentos dados", money(ok.desc))}</div>
   ${card("Ventas · " + etiqueta(), `<div class="chart" id="chVentas"></div>`, { sub: "Ventas y ganancia bruta en el período" })}
   ${card("Detalle de ventas", `<div class="row" style="padding:14px 18px 0"><input id="ventaQ" type="search" placeholder="Buscar folio, cliente o producto" value="${esc(S.ventaQ)}" style="max-width:320px"><select id="ventaPago" style="max-width:180px"><option value="">Todas las formas de pago</option>${Object.entries(PAGOS).map(([k, l]) => `<option value="${k}"${S.ventaPago === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-    ${table(["Folio", "Fecha", "Cliente", "Productos", "Pago", "#Total", "#Ganancia", "Estado", ""], list.map(v => `<tr class="${v.estado === "anulada" ? "anul" : ""}"><td class="mono">${v.folio ? "#" + v.folio : "—"}</td><td class="nw">${fechaCorta(v.fecha)} <span class="muted">${esc(v.hora)}</span></td><td>${esc(nombreCli(v))}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || esc(v.pago)}</span></td><td class="n">${money(v.total)}</td><td class="n">${money(v.total - v.costo)}</td><td class="keep">${v.estado === "anulada" ? `<span class="chip out">Anulada</span>` : `<span class="chip ok">Pagada</span>`}</td><td><div class="t-acts"><button class="btn sm" data-act="verVenta" data-id="${v.fecha}|${v.id}">Ver</button>${v.estado !== "anulada" ? `<button class="btn sm dan" data-act="anular" data-id="${v.fecha}|${v.id}">Anular</button>` : ""}</div></td></tr>`), "No hay ventas en este período", `<tr><td colspan="5">${ok.n} ventas válidas</td><td class="n">${money(ok.total)}</td><td class="n">${money(ok.ganancia)}</td><td colspan="2"></td></tr>`)}`, { flush: true, acts: csvBtn("ventas") })}`;
+    ${table(["Folio", "Fecha", "Cliente", "Productos", "Pago", "#Total", "#Ganancia", "Estado", ""], list.map(v => `<tr class="${v.estado === "anulada" ? "anul" : ""}"><td class="mono">${v.folio ? "#" + v.folio : "—"}</td><td class="nw">${fechaCorta(v.fecha)} <span class="muted">${esc(v.hora)}</span></td><td>${esc(nombreCli(v))}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || esc(v.pago)}</span></td><td class="n">${money(v.total)}</td><td class="n">${money(v.total - v.costo)}</td><td class="keep">${v.estado === "anulada" ? `<span class="chip out">Anulada</span>` : `<span class="chip ok">Pagada</span>`}</td><td><div class="t-acts"><button class="btn sm" data-act="verVenta" data-id="${v.fecha}|${v.id}">Ver</button><button class="btn sm" data-act="printVenta" data-id="${v.fecha}|${v.id}" title="Imprimir">${ico("print")}</button>${v.estado !== "anulada" ? `<button class="btn sm dan" data-act="anular" data-id="${v.fecha}|${v.id}">Anular</button>` : ""}</div></td></tr>`), "No hay ventas en este período", `<tr><td colspan="5">${ok.n} ventas válidas</td><td class="n">${money(ok.total)}</td><td class="n">${money(ok.ganancia)}</td><td colspan="2"></td></tr>`)}`, { flush: true, acts: csvBtn("ventas") })}`;
 }
 function postVentas() { const [a, b] = rango(); chart($("#chVentas"), serie(ventasEn(a, b), a, b)); }
 
@@ -840,6 +857,7 @@ function pgClientes() {
     det = card(esc(sel.nombre), `<div class="kpis">${kpi(`Compró · ${etiqueta()}`, money(per.total), `${per.n} compras`, "feat")}${kpi(`Compró en ${Y}`, money(ya.total), `promedio ${money(ya.total / 12)} por mes`)}${kpi("Ganancia que te dejó", money(ya.ganancia), `en ${Y}`)}${kpi("Saldo por cobrar", money(saldo), saldo > 0 ? `<a href="#" data-act="abono" data-id="${id}">registrar pago</a>` : "al día")}</div>
       <div><p class="lbl" style="margin-bottom:6px">Compras por mes · ${Y}</p><div class="chart" id="chCli"></div></div>
       ${table(["Fecha", "Productos", "Pago", "#Total"], mine.filter(v => v.fecha >= a && v.fecha <= b).map(v => `<tr class="click" data-act="verVenta" data-id="${v.fecha}|${v.id}"><td class="nw">${fechaCorta(v.fecha)}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || v.pago}</span></td><td class="n">${money(v.total)}</td></tr>`), "Sin compras en este período")}
+      ${(() => { const esp = Object.entries(sel.precios || {}).filter(([pid]) => S.data.productos[pid]); return esp.length ? `<div><p class="lbl" style="margin-bottom:6px">Precios especiales de este cliente</p>${table(["Producto", "#Precio normal", "#Precio especial", "#Diferencia", ""], esp.map(([pid, pr]) => { const p = S.data.productos[pid]; return `<tr><td>${esc(p.nombre)}</td><td class="n">${money(p.precio)}</td><td class="n"><b>${money(pr)}</b></td><td class="n ${pr < p.precio ? "down" : "up"}">${pr < p.precio ? "−" : "+"}${money(Math.abs(p.precio - pr))}</td><td><div class="t-acts"><button class="btn sm dan" data-act="quitarEspecial" data-id="${id}|${pid}">${ico("lock")}Quitar</button></div></td></tr>`; }), "")}<p class="hint" style="margin-top:6px">Se aplican solos cuando eliges a este cliente en el punto de venta. Para crear uno, cambia el precio en una venta con este cliente.</p></div>` : ""; })()}
       ${abonos.length ? `<div><p class="lbl" style="margin-bottom:6px">Pagos de cuenta corriente</p>${table(["Fecha", "Forma de pago", "#Monto"], abonos.map(x => `<tr><td>${fechaCorta(x.fecha)}</td><td>${PAGOS[x.pago] || x.pago}</td><td class="n">${money(x.monto)}</td></tr>`), "")}</div>` : ""}`,
       { sub: esc([sel.doc && "RUT " + sel.doc, [sel.dir, sel.comuna].filter(Boolean).join(", "), sel.tel, sel.email].filter(Boolean).join(" · ")), acts: `<button class="btn sm" data-act="abono" data-id="${id}">Registrar pago</button><button class="btn sm" data-act="editCli" data-id="${id}">Editar</button><button class="btn sm ghost" data-act="cliCerrar">Cerrar</button>`, id: "cliDet" });
   }
@@ -918,6 +936,11 @@ function pgAjustes() {
   const estado = { db: ["Base de datos conectada", `Todo se guarda automáticamente en <b class="mono small">${esc(S.info.db || "")}</b>. Cada día que abres el programa se crea una copia de seguridad automática en la carpeta Respaldos.`], sin: ["Sin conexión con la base de datos", "Abre el programa Vendímetro para trabajar con tus datos."], demo: ["Modo demostración", "Nada se guarda."], cargando: ["Conectando…", ""] }[S.modo];
   return `<div class="cols">
   ${card("Apariencia", `<div class="row between"><span>Colores del programa</span><div class="seg"><button data-act="tema" data-id="oscuro" aria-pressed="${n.tema !== "claro"}">Oscuro</button><button data-act="tema" data-id="claro" aria-pressed="${n.tema === "claro"}">Claro</button></div></div>`)}
+  ${card("Impresión", `<div class="row between"><span>Formato al imprimir una venta</span><div class="seg"><button data-act="impFormato" data-id="ticket" aria-pressed="${n.impFormato !== "a4"}">Ticket 80 mm</button><button data-act="impFormato" data-id="a4" aria-pressed="${n.impFormato === "a4"}">Hoja A4</button></div></div>
+    <label class="chk"><input type="checkbox" id="impAuto"${n.impAuto ? " checked" : ""}> Imprimir automáticamente cada venta al cobrar</label>
+    <p class="hint">El ticket es para impresoras térmicas de boletas; la hoja A4 es una nota de venta con los datos del cliente. Al ver cualquier venta puedes imprimir en el otro formato.${S.info.plataforma === "darwin" ? " En Mac, la venta se abre en el navegador con el cuadro de impresión." : ""}</p>`)}
+  ${card("Código de administrador", `<p class="muted">Se pide para cambiar el precio de un producto en una venta y para quitar precios especiales de clientes.</p>
+    <div class="row"><button class="btn" data-act="adminCambiar"${S.modo !== "db" ? " disabled" : ""}>${ico("lock")}Crear o cambiar código</button></div>`)}
   ${card("Datos del negocio", `<form data-form="negocio" class="fgrid"><div class="fld w2"><label for="nNombre">Nombre del negocio</label><input id="nNombre" value="${esc(n.nombre || "")}" placeholder="Ej.: Almacén San Martín"></div><div class="fld"><label for="nMoneda">Símbolo de moneda</label><input id="nMoneda" value="${esc(n.moneda || "$")}" maxlength="4"></div><div class="fld"><label for="nDoc">RUT del negocio</label><input id="nDoc" value="${esc(n.doc || "")}" placeholder="76.123.456-0" autocomplete="off"><span class="hint" id="nDocHint">${n.doc ? "✓ RUT válido" : "Opcional"}</span></div><div class="fld w2"><label for="nDir">Dirección</label><input id="nDir" value="${esc(n.dir || "")}"></div><div class="fld"><label for="nTel">Teléfono</label><input id="nTel" value="${esc(n.tel || "")}"></div><div class="fld w2"><label for="nPie">Mensaje al pie del ticket</label><input id="nPie" value="${esc(n.pie || "¡Gracias por su compra!")}"></div><div class="row end w2"><button class="btn pri" type="submit">Guardar datos</button></div></form>`, { sub: "Aparecen en los tickets de venta" })}
   ${card("Base de datos", `<div class="row"><i class="dot ${S.modo === "db" ? "on" : S.modo === "demo" ? "demo" : ""}"></i><b>${estado[0]}</b></div><p class="muted">${estado[1]}</p>
     <div class="kpis">${kpi("Productos", nf0.format(Object.keys(S.data.productos).length))}${kpi("Clientes", nf0.format(Object.keys(S.data.clientes).length))}${kpi("Ventas", nf0.format(M().ventas.length))}${kpi("Registros", nf0.format(docs))}</div>
@@ -1039,13 +1062,85 @@ function ticketHTML(v) {
     ${v.nota ? `<hr><div>${esc(v.nota)}</div>` : ""}${v.estado === "anulada" ? `<hr><div class="c"><b>VENTA ANULADA</b></div>` : ""}<hr><div class="c">${esc(n.pie || "¡Gracias por su compra!")}</div></div>`;
 }
 function ticketDoc(v) {
-  const css = `body{font-family:ui-monospace,Consolas,monospace;font-size:13px;max-width:300px;margin:12px auto;color:#000}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:12px}hr{border:0;border-top:1px dashed #555;margin:6px 0}.tot{font-size:16px;font-weight:bold}.receipt{display:flex;flex-direction:column;gap:3px}@page{margin:4mm}`;
+  const css = `body{font-family:ui-monospace,Consolas,monospace;font-size:13px;max-width:72mm;margin:0 auto;color:#000}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:12px}hr{border:0;border-top:1px dashed #555;margin:6px 0}.tot{font-size:16px;font-weight:bold}.receipt{display:flex;flex-direction:column;gap:3px}@page{size:80mm auto;margin:4mm}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>Ticket ${v.folio || ""}</title><style>${css}</style></head><body>${ticketHTML(v)}</body></html>`;
 }
+function notaHTML(v) {
+  // Nota de venta en hoja A4: comprobante interno, con los datos completos del cliente.
+  const n = negocio(), c = S.data.clientes[v.cli];
+  const folio = v.folio ? String(v.folio).padStart(6, "0") : "—";
+  const filaCli = (k, val) => val ? `<tr><th>${k}</th><td>${esc(val)}</td></tr>` : "";
+  const items = (v.items || []).map(i => { const p = S.data.productos[i.pid]; return `<tr><td class="n">${nf.format(i.cant)}</td><td>${esc(p?.codigo || "")}</td><td>${esc(i.nombre)}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.cant * i.precio)}</td></tr>`; }).join("");
+  const css = `*{box-sizing:border-box}body{font-family:"Geist",Arial,Helvetica,sans-serif;font-size:12px;color:#111;margin:0}@page{size:A4;margin:16mm}
+    .top{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:12px}
+    .neg b{font-size:20px;display:block;margin-bottom:4px}.neg div{color:#333}
+    .doc{border:2px solid #111;border-radius:6px;padding:10px 16px;text-align:center;min-width:190px}.doc b{display:block;font-size:13px;letter-spacing:.06em}.doc .num{font-size:20px;font-weight:700;margin:4px 0}
+    h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px;color:#444}
+    table{width:100%;border-collapse:collapse}.cli th{text-align:left;width:110px;color:#555;font-weight:600;padding:2px 0}.cli td{padding:2px 0}
+    .it th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #111;padding:6px 6px}.it td{padding:6px;border-bottom:1px solid #ddd}.n,.it th.n{text-align:right;white-space:nowrap}
+    @media screen{body{max-width:210mm;margin:0 auto;padding:16mm}}
+    .tot{margin-top:12px;margin-left:auto;width:280px}.tot td{padding:4px 6px}.tot .g td{font-size:16px;font-weight:700;border-top:2px solid #111}
+    .pie{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;color:#555;font-size:11px;display:flex;justify-content:space-between;gap:16px}
+    .anul{color:#b00;font-weight:700;font-size:16px;text-align:center;border:2px solid #b00;padding:6px;margin-top:12px}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Nota de venta ${folio}</title><style>${css}</style></head><body>
+    <div class="top"><div class="neg"><b>${esc(n.nombre || "Vendímetro")}</b>${n.doc ? `<div>RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div>${esc(n.dir)}</div>` : ""}${n.tel ? `<div>Tel. ${esc(n.tel)}</div>` : ""}</div>
+      <div class="doc"><b>NOTA DE VENTA</b><div class="num">N° ${folio}</div><div>${fechaCorta(v.fecha)}${v.hora ? " · " + esc(v.hora) : ""}</div></div></div>
+    <h2>Cliente</h2><table class="cli">${filaCli("Nombre", nombreCli(v))}${c ? filaCli("RUT", c.doc) + filaCli("Dirección", [c.dir, c.comuna].filter(Boolean).join(", ")) + filaCli("Teléfono", c.tel) + filaCli("Email", c.email) : ""}</table>
+    <h2>Detalle</h2><table class="it"><thead><tr><th class="n">Cant.</th><th>Código</th><th>Descripción</th><th class="n">Precio unit.</th><th class="n">Total</th></tr></thead><tbody>${items}</tbody></table>
+    <table class="tot"><tr><td>Subtotal</td><td class="n">${money(v.sub)}</td></tr>${v.desc ? `<tr><td>Descuento</td><td class="n">−${money(v.desc)}</td></tr>` : ""}<tr class="g"><td>TOTAL</td><td class="n">${money(v.total)}</td></tr>
+      <tr><td>Forma de pago</td><td class="n">${PAGOS[v.pago] || esc(v.pago)}</td></tr>${v.pago === "efectivo" && v.recibido ? `<tr><td>Recibido</td><td class="n">${money(v.recibido)}</td></tr><tr><td>Vuelto</td><td class="n">${money(v.recibido - v.total)}</td></tr>` : ""}</table>
+    ${v.nota ? `<h2>Nota</h2><div>${esc(v.nota)}</div>` : ""}${v.estado === "anulada" ? `<div class="anul">VENTA ANULADA</div>` : ""}
+    <div class="pie"><span>${esc(n.pie || "¡Gracias por su compra!")}</span><span>Comprobante interno. No válido como documento tributario.</span></div></body></html>`;
+}
+async function imprimirDoc(html, nombre) {
+  if (S.info.plataforma === "darwin") {
+    // En Mac la ventana del programa no imprime: se abre en el navegador con el cuadro de impresión.
+    const auto = html.replace("</body>", "<script>window.onload=function(){setTimeout(function(){window.print()},400)}<\/script></body>");
+    try { await api("POST", "/api/imprimir", { html: auto, nombre }); toast("Se abrió la venta en el navegador para imprimir"); }
+    catch (e) { toast("No se pudo preparar la impresión.", true); }
+    return;
+  }
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(f);
+  f.contentDocument.open(); f.contentDocument.write(html); f.contentDocument.close();
+  setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 300);
+}
+function imprimirVenta(v, formato) {
+  const a4 = (formato || negocio().impFormato) === "a4";
+  imprimirDoc(a4 ? notaHTML(v) : ticketDoc(v), `${a4 ? "nota-venta" : "ticket"}-${v.folio || v.id}`);
+}
+
+/* ===================== código de administrador ===================== */
+// Para cambiar precios en la venta. El código se guarda cifrado en el servidor; aquí solo se pregunta.
+let adminPendiente = null;
+async function pedirAdmin(motivo, fn) {
+  if (S.adminHasta > Date.now()) return fn();
+  if (S.modo === "demo") return fn(); // en la demostración no se pide ni se crea el código real
+  let definido = false;
+  try { definido = (await api("POST", "/api/pin", { accion: "estado" })).definido; } catch (e) { return toast("No se pudo verificar el código.", true); }
+  adminPendiente = fn;
+  if (!definido) {
+    abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá cambiar precios.</p>
+      <form data-form="adminCrear" class="fgrid"><div class="fld"><label for="admNuevo">Código nuevo (4 a 8 números)</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Crear código</button></div></form>`);
+  } else {
+    abrir("Código de administrador", `<p>Para ${esc(motivo)} escribe el código de administrador.</p>
+      <form data-form="adminPin" class="fgrid"><div class="fld w2"><label for="admPin">Código</label><input id="admPin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>
+      <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Continuar</button></div></form>`);
+  }
+}
+function adminOk() {
+  S.adminHasta = Date.now() + 5 * 60 * 1000; // vale 5 minutos o hasta cobrar
+  const fn = adminPendiente; adminPendiente = null; cerrar(); if (fn) fn();
+}
+const precioPara = pid => { const esp = S.data.clientes[S.pos.cli]?.precios?.[pid]; return esp != null ? esp : S.data.productos[pid]?.precio || 0; };
+
 function buscarVenta(key) { const [f, id] = key.split("|"); return M().ventas.find(v => v.fecha === f && v.id === id); }
 function verVenta(v, nueva) {
   abrir(nueva ? "Venta registrada" : `Venta ${v.folio ? "#" + v.folio : ""}`, `${nueva ? `<div class="vuelto"><span>Cobrado</span><span>${money(v.total)}</span></div>` : ""}${nueva && v.pago === "efectivo" && v.recibido ? `<div class="vuelto"><span>Vuelto a entregar</span><span>${money(v.recibido - v.total)}</span></div>` : ""}${ticketHTML(v)}
-  <div class="dlg-f"><button class="btn" data-act="printTicket" data-id="${v.fecha}|${v.id}">Imprimir ticket</button><button class="btn" data-act="dlTicket" data-id="${v.fecha}|${v.id}">${ico("dl")}Descargar ticket</button>${nueva ? `<button class="btn pri" data-act="cerrar">Nueva venta</button>` : `<button class="btn" data-act="cerrar">Cerrar</button>`}</div>`);
+  <div class="dlg-f"><button class="btn" data-act="printTicket" data-id="${v.fecha}|${v.id}">${ico("print")}Imprimir ticket</button><button class="btn" data-act="printA4" data-id="${v.fecha}|${v.id}">${ico("print")}Imprimir hoja A4</button><button class="btn ghost" data-act="dlTicket" data-id="${v.fecha}|${v.id}">${ico("dl")}Guardar</button>${nueva ? `<button class="btn pri" data-act="cerrar">Nueva venta</button>` : `<button class="btn" data-act="cerrar">Cerrar</button>`}</div>`);
 }
 
 /* ===================== descargas ===================== */
@@ -1129,8 +1224,34 @@ const ACT = {
     const p = S.data.productos[id]; if (!p) return;
     const it = S.pos.items.find(x => x.pid === id), ya = it ? it.cant : 0;
     if (ya + 1 > (p.stock || 0)) return toast(`Solo hay ${nf.format(p.stock || 0)} de ${p.nombre} en stock.`, true);
-    if (it) it.cant++; else S.pos.items.push({ pid: id, cant: 1, precio: p.precio });
+    if (it) it.cant++; else S.pos.items.push({ pid: id, cant: 1, precio: precioPara(id) });
     posTicket();
+  },
+  posPrecio: id => {
+    const it = S.pos.items[+id]; if (!it) return;
+    pedirAdmin("cambiar el precio", () => {
+      const p = S.data.productos[it.pid], cli = S.data.clientes[S.pos.cli], esp = cli?.precios?.[it.pid];
+      abrir(`Cambiar precio · ${p.nombre}`, `<form data-form="posPrecio" data-id="${id}" class="fgrid">
+        <div class="fld w2"><div class="kpis">${kpi("Precio normal", money(p.precio))}${kpi("Costo", money(p.costo))}${esp != null ? kpi(`Precio especial de ${esc(cli.nombre)}`, money(esp)) : ""}</div></div>
+        <div class="fld w2"><label for="ppPrecio">Nuevo precio por unidad</label><input id="ppPrecio" type="number" min="0" step="0.01" inputmode="decimal" required value="${it.precio}"><span class="hint" id="ppHint"></span></div>
+        ${cli ? `<label class="chk w2" style="grid-column:1/-1"><input type="checkbox" id="ppEspecial"${esp != null ? " checked" : ""}> Guardar como precio especial para ${esc(cli.nombre)} (se usará solo en sus próximas compras)</label>` : `<p class="hint w2" style="grid-column:1/-1">Para guardar un precio especial para un cliente, elige primero el cliente en la venta.</p>`}
+        <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Aplicar precio</button></div></form>`);
+      precioHint(it.pid);
+    });
+  },
+  quitarEspecial: id => {
+    const [cid, pid] = id.split("|");
+    pedirAdmin("quitar un precio especial", () => seguro(async () => {
+      const c = clone(S.data.clientes[cid]); delete c.precios[pid];
+      await guardar("clientes", cid, c);
+    }, "Precio especial quitado"));
+  },
+  adminCambiar: () => {
+    api("POST", "/api/pin", { accion: "estado" }).then(r => abrir(r.definido ? "Cambiar código de administrador" : "Crear código de administrador", `<form data-form="adminCambiar" class="fgrid">
+      ${r.definido ? `<div class="fld w2"><label for="admActual">Código actual</label><input id="admActual" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>` : ""}
+      <div class="fld"><label for="admNuevo">Código nuevo (4 a 8 números)</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Guardar código</button></div></form>`)).catch(() => toast("No se pudo consultar el código.", true));
   },
   posQ: id => {
     const [i, d] = id.split("|").map(Number), it = S.pos.items[i], p = S.data.productos[it.pid];
@@ -1139,7 +1260,7 @@ const ACT = {
     it.cant = n; posTicket();
   },
   posDel: id => { S.pos.items.splice(+id, 1); posTicket(); },
-  posVaciar: () => { Object.assign(S.pos, { items: [], desc: "", recibido: "", nota: "" }); render(); },
+  posVaciar: () => { Object.assign(S.pos, { items: [], desc: "", recibido: "", nota: "" }); S.adminHasta = 0; render(); },
   posDescT: id => { S.pos.descTipo = id; render(); },
   posPago: id => { S.pos.pago = id; render(); },
   cobrar: async () => {
@@ -1152,7 +1273,7 @@ const ACT = {
     const folio = (negocio().folio || 0) + 1;
     const venta = {
       id: uid("v"), folio, hora: fecha === hoy() ? ahora() : "", cli: ps.cli, cliNombre: S.data.clientes[ps.cli]?.nombre || "",
-      items: ps.items.map(it => { const p = S.data.productos[it.pid]; return { pid: it.pid, nombre: p.nombre, cat: p.cat || "", cant: it.cant, precio: it.precio, costo: p.costo }; }),
+      items: ps.items.map(it => { const p = S.data.productos[it.pid]; return { pid: it.pid, nombre: p.nombre, cat: p.cat || "", cant: it.cant, precio: it.precio, costo: p.costo, ...(it.precio !== p.precio ? { precioNormal: p.precio } : {}) }; }),
       sub: c.sub, desc: Math.round(c.desc * 100) / 100, total: c.total, costo: c.costo, pago: ps.pago, recibido: ps.pago === "efectivo" ? num(ps.recibido) : 0, nota: ps.nota.trim(), estado: "ok",
     };
     $("#posCobrar").disabled = true;
@@ -1161,18 +1282,18 @@ const ACT = {
       await guardar("config", "negocio", { ...negocio(), folio });
       for (const it of venta.items) await moverStock(it.pid, -it.cant);
     });
-    if (ok) { Object.assign(S.pos, { items: [], desc: "", recibido: "", nota: "", cli: "", pago: "efectivo" }); render(); verVenta({ ...venta, fecha }, true); }
+    if (ok) {
+      Object.assign(S.pos, { items: [], desc: "", recibido: "", nota: "", cli: "", pago: "efectivo" }); S.adminHasta = 0;
+      render(); verVenta({ ...venta, fecha }, true);
+      if (negocio().impAuto) imprimirVenta({ ...venta, fecha });
+    }
   },
   verVenta: id => { const v = buscarVenta(id); if (v) verVenta(v); },
   dlTicket: id => { const v = buscarVenta(id); if (v) descargar(`ticket-${v.folio || v.id}.html`, ticketDoc(v)); },
-  printTicket: id => {
-    const v = buscarVenta(id); if (!v) return;
-    const f = document.createElement("iframe");
-    f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
-    document.body.appendChild(f);
-    f.contentDocument.open(); f.contentDocument.write(ticketDoc(v)); f.contentDocument.close();
-    setTimeout(() => { f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => f.remove(), 2000); }, 300);
-  },
+  printTicket: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "ticket"); },
+  printA4: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "a4"); },
+  printVenta: id => { const v = buscarVenta(id); if (v) imprimirVenta(v); },
+  impFormato: id => seguro(() => guardar("config", "negocio", { ...negocio(), impFormato: id })),
   anular: id => {
     const v = buscarVenta(id); if (!v) return;
     confirmar("Anular venta", `La venta ${v.folio ? "#" + v.folio : ""} de ${money(v.total)} quedará marcada como anulada y los productos volverán al stock. No se borra del historial.`, "Anular venta", () => seguro(async () => {
@@ -1349,6 +1470,48 @@ const FORM = {
     const g = { id: uid("g"), fecha, cat: $("#gCat").value, desc: $("#gDesc").value.trim(), monto, pago: $("#gPago").value };
     if (await seguro(() => agregarALista("gastos", fecha.slice(0, 7), g), `Gasto de ${money(monto)} registrado`)) { $("#gDesc").value = ""; $("#gMonto").value = ""; }
   },
+  adminPin: async () => {
+    try {
+      const r = await api("POST", "/api/pin", { accion: "verificar", pin: $("#admPin").value });
+      if (r.ok) return adminOk();
+      toast("El código no es correcto.", true); $("#admPin").value = ""; $("#admPin").focus();
+    } catch (e) { toast("No se pudo verificar el código.", true); }
+  },
+  adminCrear: async () => {
+    const nuevo = $("#admNuevo").value;
+    if (nuevo !== $("#admRepetir").value) return toast("Los dos códigos no coinciden.", true);
+    try {
+      const r = await api("POST", "/api/pin", { accion: "definir", nuevo });
+      if (!r.ok) return toast(r.error, true);
+      toast("Código de administrador creado"); adminOk();
+    } catch (e) { toast("No se pudo guardar el código.", true); }
+  },
+  adminCambiar: async () => {
+    const nuevo = $("#admNuevo").value;
+    if (nuevo !== $("#admRepetir").value) return toast("Los dos códigos nuevos no coinciden.", true);
+    try {
+      const r = await api("POST", "/api/pin", { accion: "definir", actual: $("#admActual")?.value || "", nuevo });
+      if (!r.ok) return toast(r.error, true);
+      S.adminHasta = 0; cerrar(); toast("Código de administrador guardado"); render();
+    } catch (e) { toast("No se pudo guardar el código.", true); }
+  },
+  posPrecio: async (f, id) => {
+    const it = S.pos.items[+id]; if (!it) return cerrar();
+    const precio = Math.round(num($("#ppPrecio").value) * 100) / 100;
+    if (precio < 0) return toast("El precio no puede ser negativo.", true);
+    it.precio = precio; it.manual = true;
+    const especial = $("#ppEspecial")?.checked, cid = S.pos.cli;
+    if (cid && especial != null) {
+      const c = clone(S.data.clientes[cid]), antes = c.precios?.[it.pid];
+      if (especial) { c.precios = { ...(c.precios || {}), [it.pid]: precio }; it.manual = false; }
+      else if (c.precios) delete c.precios[it.pid];
+      if (antes !== (especial ? precio : undefined)) {
+        const ok = await seguro(() => guardar("clientes", cid, c), especial ? `Precio especial guardado para ${c.nombre}` : "");
+        if (!ok) return;
+      }
+    }
+    cerrar(); posTicket();
+  },
   negocio: async () => {
     const r = rut($("#nDoc").value);
     if (!r.ok) { rutHint($("#nDoc")); $("#nDoc").focus(); return toast(r.msg, true); }
@@ -1378,6 +1541,7 @@ document.addEventListener("input", e => {
   }
   else if (id === "fpCosto" || id === "fpPrecio") margenHint();
   else if (id === "fcDoc" || id === "nDoc") rutHint(t);
+  else if (id === "ppPrecio") precioHint(S.pos.items[+t.closest("form").dataset.id]?.pid);
   else if (id === "prodQ") { S.prodQ = t.value; renderSoon(); }
   else if (id === "ventaQ") { S.ventaQ = t.value; renderSoon(); }
   else if (id === "cliQ") { S.cliQ = t.value; renderSoon(); }
@@ -1390,11 +1554,17 @@ document.addEventListener("change", e => {
   else if (id === "perDesde") { if (t.value) { P.desde = t.value; render(); } }
   else if (id === "perHasta") { if (t.value) { P.hasta = t.value; render(); } }
   else if ((id === "fcDoc" || id === "nDoc") && rut(t.value).ok) { t.value = rut(t.value).fmt; rutHint(t); }
-  else if (id === "posCli") S.pos.cli = t.value;
+  else if (id === "posCli") {
+    // al cambiar de cliente, cada producto toma el precio especial de ese cliente (o el normal), salvo los cambiados a mano
+    S.pos.cli = t.value;
+    for (const it of S.pos.items) if (!it.manual) it.precio = precioPara(it.pid);
+    posTicket();
+  }
   else if (id === "posFecha") S.pos.fecha = t.value;
   else if (t.dataset.cant != null) posTicket();
   else if (id === "prodCat") { S.prodCat = t.value; render(); }
   else if (id === "prodBajo") { S.prodBajo = t.checked; render(); }
+  else if (id === "impAuto") seguro(() => guardar("config", "negocio", { ...negocio(), impAuto: t.checked }), t.checked ? "Se imprimirá cada venta al cobrar" : "Ya no se imprimirá al cobrar");
   else if (id === "ventaPago") { S.ventaPago = t.value; render(); }
   else if (id === "cmpProd") { const p = S.data.productos[t.value]; if (p) $("#cmpCosto").placeholder = `Actual: ${money(p.costo)}`; }
 });

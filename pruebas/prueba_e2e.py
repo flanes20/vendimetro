@@ -1,9 +1,10 @@
-import json, os, shutil, tempfile, sqlite3, sys, threading, time, urllib.request
+import json, os, shutil, tempfile, sqlite3, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
 
 TMP = Path(tempfile.gettempdir()) / "vendimetro_prueba_e2e"
 shutil.rmtree(TMP, ignore_errors=True)
 os.environ["VENDIMETRO_DATOS"] = str(TMP)
+os.environ["VENDIMETRO_SIN_NAVEGADOR"] = "1"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app
 import webview
@@ -83,6 +84,41 @@ def correr(w):
     js(w, "ACT.posVaciar()"); esperar(w)
     ok("al vaciar ya no avisa", api._pendiente == "" and api.al_cerrar(w) is True)
 
+    # código de administrador y precio especial por cliente
+    req = urllib.request.Request(URL + "api/doc/config/admin", data=b'{"hash":"x"}', method="PUT", headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req); protegido = False
+    except urllib.error.HTTPError as e:
+        protegido = e.code == 403
+    ok("el código no se puede pisar desde la pantalla", protegido)
+    js(w, f"ACT.go('pos'); S.pos.cli='{cid}'; ACT.posAdd('{pid}'); ACT.posPrecio(0);"); esperar(w)
+    ok("la primera vez pide crear el código", js(w, "$('#dlgT').textContent") == "Crear código de administrador")
+    js(w, "$('#admNuevo').value='4321'; $('#admRepetir').value='4321'; FORM.adminCrear();"); esperar(w, 2)
+    ok("después pide el nuevo precio", (js(w, "$('#dlgT').textContent") or "").startswith("Cambiar precio"))
+    js(w, "$('#ppPrecio').value='150'; $('#ppEspecial').checked=true; FORM.posPrecio(null,'0');"); esperar(w)
+    ok("precio cambiado en la venta", js(w, "S.pos.items[0].precio") == 150)
+    ok("precio especial guardado en el cliente", js(w, f"S.data.clientes['{cid}'].precios['{pid}']") == 150)
+    ok("el precio normal del producto no cambia", js(w, f"S.data.productos['{pid}'].precio") == 180)
+    js(w, f"ACT.posVaciar(); S.pos.cli=''; ACT.posAdd('{pid}');"); esperar(w)
+    ok("sin cliente usa el precio normal", js(w, "S.pos.items[0].precio") == 180)
+    js(w, f"var s=$('#posCli'); s.value='{cid}'; s.dispatchEvent(new Event('change',{{bubbles:true}}));"); esperar(w)
+    ok("al elegir el cliente aplica su precio especial", js(w, "S.pos.items[0].precio") == 150)
+    js(w, "ACT.posPrecio(0)"); esperar(w)
+    ok("la vez siguiente pide el código", js(w, "$('#dlgT').textContent") == "Código de administrador")
+    js(w, "$('#admPin').value='0000'; FORM.adminPin();"); esperar(w, 2)
+    ok("rechaza un código incorrecto", js(w, "$('#dlgT').textContent") == "Código de administrador")
+    js(w, "$('#admPin').value='4321'; FORM.adminPin();"); esperar(w, 2)
+    ok("acepta el código correcto", (js(w, "$('#dlgT').textContent") or "").startswith("Cambiar precio"))
+    js(w, "ACT.cerrar(); ACT.posVaciar();"); esperar(w)
+    ok("el código no llega a la pantalla", "admin" not in json.loads(urllib.request.urlopen(URL + "api/all").read())["config"])
+
+    # impresión: nota A4, ticket de 80 mm y apertura en el navegador (Mac)
+    nota = js(w, "notaHTML(M().ventas.find(v=>v.folio===2))")
+    ok("nota A4 con número, cliente y total", all(x in nota for x in ["NOTA DE VENTA", "N° 000002", "María Gómez", "$324", "size:A4", "No válido como documento tributario"]))
+    ok("ticket con tamaño de 80 mm", "size:80mm" in js(w, "ticketDoc(M().ventas.find(v=>v.folio===2))"))
+    r = json.loads(urllib.request.urlopen(urllib.request.Request(URL + "api/imprimir", data=json.dumps({"html": nota, "nombre": "nota-venta-2"}).encode(), method="POST", headers={"Content-Type": "application/json"})).read())
+    ok("prepara la impresión para el navegador", r.get("ok") and Path(r["archivo"]).read_text(encoding="utf-8").startswith("<!doctype html>"))
+
     # recorrer todas las pantallas y todos los modos de período
     js(w, "for (const p of Object.keys(PAGES)) { S.page=p; for (const m of ['dia','mes','anio','rango']) { P.modo=m; render(); } } P.modo='mes';")
     js(w, "for (const t of ['producto','categoria','cliente','pago']) { S.repTab=t; S.page='reportes'; render(); }")
@@ -120,5 +156,7 @@ ok("merma y stock inicial en el historial", sum(len(d["lista"]) for d in datos.g
 ok("pago de cliente guardado", sum(len(d["lista"]) for d in datos.get("abonos", {}).values()) == 1)
 ok("folio siguiente = 2", datos["config"]["negocio"]["folio"] == 2)
 ok("copia de seguridad diaria creada", any((TMP / "Respaldos").glob("*_auto.db")))
+admin = datos["config"].get("admin", {})
+ok("código guardado cifrado, nunca a la vista", bool(admin.get("hash")) and bool(admin.get("sal")) and "4321" not in json.dumps(admin))
 print("\n".join(res))
 sys.exit(1 if any(r.startswith("FALLA") for r in res) else 0)
