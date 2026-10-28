@@ -25,6 +25,7 @@
   --warn: #a66a09; --warn-soft: #fbf0dc;
   --crit: #c2362b; --crit-soft: #fbe6e4;
   --side: #0f1626; --side-2: #18213a; --side-ink: #c9d0e0; --side-muted: #7d88a3; --side-act: #ffffff;
+  --feat: #e8edfd; --feat-line: #c9d4f7; --feat-k: #41589f; --feat-v: #1b3492; --feat-h: #14204a; --feat-ink: #2d3b64; --feat-up: #12805c; --feat-down: #c2362b;
   --shadow: 0 1px 2px rgba(17, 23, 37, .05), 0 4px 16px rgba(17, 23, 37, .05);
   --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -38,6 +39,7 @@
     --line: #253049; --line-2: #1d263a; --accent: #7f9bff; --accent-rgb: 127, 155, 255; --accent-ink: #0b1020; --accent-soft: #1f2a4d;
     --c2: #f0aa45; --good: #4fcf9b; --good-soft: #143528; --warn: #f2bd5c; --warn-soft: #3a2c10; --crit: #ff8f86; --crit-soft: #3d1b1a;
     --side: #080b13; --side-2: #141b2d; --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    --feat: #080b13; --feat-line: #080b13; --feat-k: #7d88a3; --feat-v: #ffffff; --feat-h: #ffffff; --feat-ink: #c9d0e0; --feat-up: #4fcf9b; --feat-down: #ff8f86;
   }
 }
 :root[data-theme="dark"] {
@@ -46,6 +48,7 @@
   --line: #253049; --line-2: #1d263a; --accent: #7f9bff; --accent-rgb: 127, 155, 255; --accent-ink: #0b1020; --accent-soft: #1f2a4d;
   --c2: #f0aa45; --good: #4fcf9b; --good-soft: #143528; --warn: #f2bd5c; --warn-soft: #3a2c10; --crit: #ff8f86; --crit-soft: #3d1b1a;
   --side: #080b13; --side-2: #141b2d; --shadow: 0 1px 2px rgba(0, 0, 0, .3);
+    --feat: #080b13; --feat-line: #080b13; --feat-k: #7d88a3; --feat-v: #ffffff; --feat-h: #ffffff; --feat-ink: #c9d0e0; --feat-up: #4fcf9b; --feat-down: #ff8f86;
 }
 
 * { box-sizing: border-box; }
@@ -156,11 +159,11 @@ input.mal, input.mal:focus { border-color: var(--crit); box-shadow: 0 0 0 3px va
 .kpi .k { font-size: 12px; font-weight: 600; color: var(--muted); }
 .kpi .v { font-family: var(--f-display); font-size: 23px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .kpi .s { font-size: 12.5px; color: var(--muted); }
-.kpi.feat { background: var(--side); border-color: var(--side); }
-.kpi.feat .k, .kpi.feat .s { color: var(--side-muted); }
-.kpi.feat .v { color: #fff; }
+.kpi.feat { background: var(--feat); border-color: var(--feat-line); }
+.kpi.feat .k, .kpi.feat .s { color: var(--feat-k); }
+.kpi.feat .v { color: var(--feat-v); }
 .up { color: var(--good); font-weight: 600; } .down { color: var(--crit); font-weight: 600; }
-.kpi.feat .up { color: #4fcf9b; } .kpi.feat .down { color: #ff8f86; }
+.kpi.feat .up { color: var(--feat-up); } .kpi.feat .down { color: var(--feat-down); }
 
 .tbl { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
@@ -282,9 +285,9 @@ details.more[open] summary { margin-bottom: 10px; }
 .receipt .r { display: flex; justify-content: space-between; gap: 12px; }
 .receipt hr { border: 0; border-top: 1px dashed var(--muted); width: 100%; margin: 6px 0; }
 .receipt .tot { font-size: 16px; font-weight: 500; }
-.welcome { background: var(--side); color: var(--side-ink); border-radius: var(--r); padding: 26px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
-.welcome h2 { color: #fff; font-size: 24px; }
-.welcome p { color: var(--side-ink); max-width: 60ch; }
+.welcome { background: var(--feat); border: 1px solid var(--feat-line); color: var(--feat-ink); border-radius: var(--r); padding: 26px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.welcome h2 { color: var(--feat-h); font-size: 24px; }
+.welcome p { color: var(--feat-ink); max-width: 60ch; }
 .welcome ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 760px) { .welcome { grid-template-columns: 1fr; } }
 .list { display: flex; flex-direction: column; }
@@ -942,7 +945,7 @@ function pgAjustes() {
   ${card("Código de administrador", `<p class="muted">Se pide para cambiar el precio de un producto en una venta y para quitar precios especiales de clientes.</p>
     <div class="row"><button class="btn" data-act="adminCambiar"${S.modo !== "db" ? " disabled" : ""}>${ico("lock")}Crear o cambiar código</button></div>`)}
   ${card("Datos del negocio", `<form data-form="negocio" class="fgrid"><div class="fld w2"><label for="nNombre">Nombre del negocio</label><input id="nNombre" value="${esc(n.nombre || "")}" placeholder="Ej.: Almacén San Martín"></div><div class="fld"><label for="nMoneda">Símbolo de moneda</label><input id="nMoneda" value="${esc(n.moneda || "$")}" maxlength="4"></div><div class="fld"><label for="nDoc">RUT del negocio</label><input id="nDoc" value="${esc(n.doc || "")}" placeholder="76.123.456-0" autocomplete="off"><span class="hint" id="nDocHint">${n.doc ? "✓ RUT válido" : "Opcional"}</span></div><div class="fld w2"><label for="nDir">Dirección</label><input id="nDir" value="${esc(n.dir || "")}"></div><div class="fld"><label for="nTel">Teléfono</label><input id="nTel" value="${esc(n.tel || "")}"></div><div class="fld w2"><label for="nPie">Mensaje al pie del ticket</label><input id="nPie" value="${esc(n.pie || "¡Gracias por su compra!")}"></div><div class="row end w2"><button class="btn pri" type="submit">Guardar datos</button></div></form>`, { sub: "Aparecen en los tickets de venta" })}
-  ${card("Base de datos", `<div class="row"><i class="dot ${S.modo === "db" ? "on" : S.modo === "demo" ? "demo" : ""}"></i><b>${estado[0]}</b></div><p class="muted">${estado[1]}</p>
+  ${card("Base de datos", `<div class="row"><i class="dot ${S.modo === "db" ? "on" : S.modo === "demo" ? "demo" : ""}"></i><b>${estado[0]}</b></div><p class="muted">${estado[1]}</p>${S.info.version ? `<p class="muted">Vendímetro versión ${esc(S.info.version)}</p>` : ""}
     <div class="kpis">${kpi("Productos", nf0.format(Object.keys(S.data.productos).length))}${kpi("Clientes", nf0.format(Object.keys(S.data.clientes).length))}${kpi("Ventas", nf0.format(M().ventas.length))}${kpi("Registros", nf0.format(docs))}</div>
     <div><p class="lbl">Copias de seguridad</p><p class="muted small">Crea una copia ahora (queda en la carpeta Respaldos) o exporta tus datos a un archivo para guardarlo en un pendrive. Si algún día cambias de computadora, instala el programa y usa «Importar datos».</p></div>
     <div class="row"><button class="btn pri" data-act="respaldoYa"${S.modo !== "db" ? " disabled" : ""}>Crear copia de seguridad ahora</button><button class="btn" data-act="abrirCarpeta"${S.modo !== "db" ? " disabled" : ""}>Abrir carpeta de datos</button></div>

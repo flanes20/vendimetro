@@ -21,6 +21,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 PUERTO = 8765
+VERSION = "1.6"
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
 DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
@@ -189,7 +190,7 @@ class Manejador(BaseHTTPRequestHandler):
                     datos.setdefault(col, {})[id_] = json.loads(data)
             return self.responder(200, datos)
         if ruta == "/api/info":
-            return self.responder(200, {"db": str(DB_PATH), "respaldos": str(RESPALDOS), "plataforma": sys.platform})
+            return self.responder(200, {"db": str(DB_PATH), "respaldos": str(RESPALDOS), "plataforma": sys.platform, "version": VERSION})
         self.responder(404, {"error": "no encontrado"})
 
     def do_PUT(self):

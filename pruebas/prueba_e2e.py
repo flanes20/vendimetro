@@ -30,6 +30,7 @@ def correr(w):
     time.sleep(4)
     js(w, "window.__err=[];window.addEventListener('error',e=>window.__err.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__err.push('promesa: '+String(e.reason)));")
     ok("pantalla cargó y conectó a la base", js(w, "S.modo") == "db", js(w, "S.modo"))
+    ok("muestra la versión instalada", js(w, "S.info.version") == app.VERSION)
 
     # ajustes del negocio
     js(w, "ACT.go('ajustes'); $('#nNombre').value='Almacén Don Pepe'; $('#nMoneda').value='$'; FORM.negocio();"); esperar(w)
