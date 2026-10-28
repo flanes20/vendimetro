@@ -35,16 +35,24 @@ jobs:
         run: |
           export VENDIMETRO_DATOS="$RUNNER_TEMP/datos"
           VENDIMETRO_SIN_VENTANA=1 "dist/Vendímetro.app/Contents/MacOS/Vendímetro" &
+          PID=$!
           sleep 10
           curl -sf http://127.0.0.1:8765/api/info
           curl -sf http://127.0.0.1:8765/ | grep -q "Vendímetro"
+          # cerrarla para que no deje ocupados los archivos al armar el .dmg
+          kill $PID; wait $PID || true
       - name: Crear instalador (.dmg)
         run: |
           mkdir dmg
           cp -R "dist/Vendímetro.app" dmg/
           ln -s /Applications dmg/Aplicaciones
           cp "Cómo usar en Mac.txt" dmg/
-          hdiutil create -volname "Vendímetro" -srcfolder dmg -ov -format UDZO "Vendimetro-Mac-${{ matrix.chip }}.dmg"
+          # en los Mac de GitHub hdiutil a veces falla con "Resource busy": se reintenta
+          for i in 1 2 3 4 5; do
+            hdiutil create -volname "Vendímetro" -srcfolder dmg -ov -format UDZO "Vendimetro-Mac-${{ matrix.chip }}.dmg" && break
+            [ $i = 5 ] && exit 1
+            sleep 10
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: Vendimetro-Mac-${{ matrix.chip }}
