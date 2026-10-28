@@ -18,7 +18,7 @@ Instrucciones paso a paso: [Cómo usar en Mac](Cómo%20usar%20en%20Mac.txt) · [
 
 ## Qué hace
 
-- **Punto de venta:** buscador y lector de código de barras; efectivo con vuelto, débito, crédito, transferencia y fiado; descuentos; tickets para imprimir.
+- **Punto de venta:** buscador y lector de código de barras; efectivo con vuelto, débito, crédito, transferencia y cheque (queda por cobrar hasta registrar que se cobró); descuentos; tickets para imprimir.
 - **Inventario:** costo, precio, margen y stock de cada producto; alertas de stock bajo; historial de entradas y salidas.
 - **Compras y proveedores:** la mercadería comprada se suma sola al stock y actualiza el costo.
 - **Clientes:** cuánto compra cada uno por mes y cuánto debe si se le fía.

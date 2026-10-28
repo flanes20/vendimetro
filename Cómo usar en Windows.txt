@@ -15,7 +15,7 @@ ABRIR
 PRIMEROS PASOS
   1. Ajustes: escribe el nombre del negocio y la moneda.
   2. Productos: carga cada producto con su costo, precio de venta y stock.
-  3. Clientes: carga los clientes que compran seguido o fiado (opcional).
+  3. Clientes: carga los clientes que compran seguido o pagan con cheque (opcional).
   4. Para vender, usa el botón "Nueva venta".
   5. Anota los gastos (alquiler, luz, sueldos) en Gastos para ver la ganancia real.
 

@@ -316,7 +316,7 @@ details.more[open] summary { margin-bottom: 10px; }
 /* ===================== utilidades ===================== */
 const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const MES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-const PAGOS = { efectivo: "Efectivo", debito: "Débito", credito: "Crédito", transferencia: "Transferencia", fiado: "Fiado" };
+const PAGOS = { efectivo: "Efectivo", debito: "Débito", credito: "Crédito", transferencia: "Transferencia", fiado: "Cheque" };
 const CAT_GASTO = ["Alquiler", "Servicios (luz, agua, internet)", "Sueldos", "Impuestos", "Transporte", "Publicidad", "Mantenimiento", "Comisiones bancarias", "Otros"];
 const LOC = (navigator.language || "").startsWith("es") ? navigator.language : "es-AR";
 // Separadores del idioma, pero agrupando siempre los miles ("4.500", no "4500" como hace el español por defecto).
@@ -695,7 +695,7 @@ const PAGES = {
   ventas: { t: "Ventas", g: "Operación", per: 1, ayuda: "Todas las ventas hechas. Puedes buscarlas, ver el ticket o anular una venta." },
   productos: { t: "Productos e inventario", nav: "Productos", g: "Operación", per: 1, ayuda: "Lo que vendes, cuánto te cuesta, a cuánto lo vendes y cuántos te quedan." },
   compras: { t: "Compras y proveedores", nav: "Compras", g: "Operación", per: 1, ayuda: "Anota la mercadería que compras: se suma sola al stock." },
-  clientes: { t: "Clientes", g: "Operación", per: 1, ayuda: "Cuánto te compra cada cliente y cuánto te debe si le fías." },
+  clientes: { t: "Clientes", g: "Operación", per: 1, ayuda: "Cuánto te compra cada cliente y cuánto te debe en cheques por cobrar." },
   gastos: { t: "Gastos", g: "Finanzas", per: 1, ayuda: "Alquiler, luz, sueldos… Anótalos para saber cuánto ganas de verdad." },
   reportes: { t: "Reportes", g: "Finanzas", per: 1, ayuda: "Cuánto vendes y cuánto ganas por día, mes o año, y qué se vende más." },
   ajustes: { t: "Ajustes", g: "Sistema", ayuda: "Datos de tu negocio, Excel y copias de seguridad." },
@@ -719,7 +719,7 @@ function pgPanel() {
     ${kpi("Ganancia bruta del mes", money(vMes.ganancia), `margen ${pct(vMes.total ? vMes.ganancia / vMes.total * 100 : NaN)}`)}
     ${kpi("Ganancia neta del mes", money(neta), `después de ${money(gMes)} en gastos`)}
     ${kpi("Ticket promedio", money(vMes.ticket), `${vMes.n} ventas este mes`)}
-    ${kpi("Por cobrar (fiado)", money(porCobrar), porCobrar > 0 ? `<a href="#" data-act="go" data-id="clientes">ver clientes</a>` : "todo cobrado")}
+    ${kpi("Cheques por cobrar", money(porCobrar), porCobrar > 0 ? `<a href="#" data-act="go" data-id="clientes">ver clientes</a>` : "todo cobrado")}
   </div>`;
   h += `<div class="cols c-wide">${card("Últimos 30 días", `<div class="chart" id="chPanel"></div>`, { sub: "Ventas por día y ganancia bruta" })}
     ${card("Más vendidos del mes", (() => { const ps = porProducto(ventasEn(ma, t)).slice(0, 6), mx = ps[0]?.total || 1; return ps.length ? `<div class="list">${ps.map(p => `<div><div class="prodname" style="flex:1;min-width:0"><b>${esc(p.nombre)}</b><div class="bar-in"><i style="width:${p.total / mx * 100}%"></i></div></div><div style="text-align:right"><b>${money(p.total)}</b><div class="small muted">${nf.format(p.cant)} u.</div></div></div>`).join("")}</div>` : `<p class="empty">Todavía no hay ventas este mes</p>`; })(), { flush: true })}</div>`;
@@ -1267,7 +1267,7 @@ const ACT = {
     const ps = S.pos, c = calcPos();
     if (!ps.items.length) return;
     for (const it of ps.items) { const p = S.data.productos[it.pid]; if (!p) return toast("Un producto de la venta ya no existe. Quítalo.", true); if (it.cant > (p.stock || 0)) return toast(`No hay stock suficiente de ${p.nombre}.`, true); }
-    if (ps.pago === "fiado" && !ps.cli) return toast("Para vender fiado elige un cliente.", true);
+    if (ps.pago === "fiado" && !ps.cli) return toast("Para recibir un cheque elige el cliente que lo entrega.", true);
     if (ps.pago === "efectivo" && ps.recibido !== "" && c.vuelto < 0) return toast(`El monto recibido no alcanza. Faltan ${money(-c.vuelto)}.`, true);
     const fecha = ps.fecha || hoy();
     const folio = (negocio().folio || 0) + 1;
