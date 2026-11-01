@@ -27,6 +27,16 @@ def esperar(w, segundos=1.2):
     time.sleep(segundos)
 
 def correr(w):
+    # si una comprobación revienta, se anota como falla y la ventana se cierra igual (si no, la prueba queda colgada)
+    try:
+        pasos(w)
+    except Exception as e:
+        ok("la prueba terminó sin excepciones", False, repr(e)[:300])
+    finally:
+        try: w.destroy()
+        except Exception: pass
+
+def pasos(w):
     time.sleep(4)
     js(w, "window.__err=[];window.addEventListener('error',e=>window.__err.push(String(e.message)));window.addEventListener('unhandledrejection',e=>window.__err.push('promesa: '+String(e.reason)));")
     ok("pantalla cargó y conectó a la base", js(w, "S.modo") == "db", js(w, "S.modo"))
@@ -115,8 +125,9 @@ def correr(w):
 
     # impresión: nota A4, ticket de 80 mm y apertura en el navegador (Mac)
     nota = js(w, "notaHTML(M().ventas.find(v=>v.folio===2))")
-    ok("nota A4 con número, cliente y total", all(x in nota for x in ["NOTA DE VENTA", "N° 000002", "María Gómez", "$324", "size:A4", "No válido como documento tributario"]))
+    ok("nota A4 con número, cliente y total", all(x in nota for x in ["NOTA DE VENTA", "N° 000002", "María Gómez", "$324", "size:A4", "Gracias por su compra"]) and "Vendímetro" not in nota and "Comprobante interno" not in nota)
     ok("ticket con tamaño de 80 mm", "size:80mm" in js(w, "ticketDoc(M().ventas.find(v=>v.folio===2))"))
+    ok("miles con punto y decimales con coma", js(w, "nf0.format(1234567) + ' ' + nf.format(2.5)") == "1.234.567 2,5", js(w, "nf0.format(1234567)"))
     r = json.loads(urllib.request.urlopen(urllib.request.Request(URL + "api/imprimir", data=json.dumps({"html": nota, "nombre": "nota-venta-2"}).encode(), method="POST", headers={"Content-Type": "application/json"})).read())
     ok("prepara la impresión para el navegador", r.get("ok") and Path(r["archivo"]).read_text(encoding="utf-8").startswith("<!doctype html>"))
 
@@ -129,7 +140,7 @@ def correr(w):
     ok("venta sin stock registrada, stock queda en -2", js(w, f"S.data.productos['{pan}'].stock") == -2 and js(w, "M().ventas.some(v=>v.folio===3)"))
 
     # crear un cliente desde el punto de venta: queda guardado y elegido en la venta
-    js(w, "ACT.go('pos'); const sel=$('#posCli'); sel.value='__nuevo'; sel.dispatchEvent(new Event('change',{bubbles:true}));"); esperar(w, 0.5)
+    js(w, "ACT.go('pos'); const sel=$('#posCli'); sel.value='__nuevo'; sel.dispatchEvent(new Event('change',{bubbles:true}));"); esperar(w)
     ok("la opción de crear cliente abre el formulario", js(w, "$('#dlgT').textContent") == "Nuevo cliente")
     js(w, "$('#fcNombre').value='Rosa Díaz'; FORM.cli(null,'');"); esperar(w)
     nuevo = js(w, "Object.keys(S.data.clientes).find(k=>S.data.clientes[k].nombre==='Rosa Díaz')")
@@ -150,7 +161,6 @@ def correr(w):
     ok("datos reales intactos después de la demostración", js(w, "S.data.productos[Object.keys(S.data.productos)[0]].nombre") == "Café 500 g")
     errs = js(w, "window.__err")
     ok("sin errores en pantalla", not errs, "; ".join(errs or []))
-    w.destroy()
 
 api = app.ApiVentana()
 w = webview.create_window("prueba", URL, js_api=api, width=1300, height=850)

@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 PUERTO = 8765
-VERSION = "1.9"
+VERSION = "1.10"
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
 DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
@@ -288,7 +288,13 @@ class ApiVentana:
     def cerrar(self):
         import webview
         self._forzar_cierre = True
-        webview.windows[0].destroy()
+        # se cierra un instante después, cuando la pantalla ya recibió la respuesta: en Mac,
+        # cerrar la ventana desde dentro de la llamada dejaba el programa colgado
+        threading.Timer(0.2, webview.windows[0].destroy).start()
+        # respaldo: si la ventana no se cierra, se termina el programa (los datos ya están guardados)
+        salida = threading.Timer(4, lambda: os._exit(0))
+        salida.daemon = True
+        salida.start()
 
     def al_cerrar(self, ventana):
         """Si hay trabajo a medias, cancela el cierre y pregunta en la pantalla."""

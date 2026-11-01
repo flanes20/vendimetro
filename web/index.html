@@ -344,8 +344,8 @@ const MES_C = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov"
 const PAGOS = { efectivo: "Efectivo", debito: "Débito", credito: "Crédito", transferencia: "Transferencia", fiado: "Cheque" };
 const CAT_GASTO = ["Alquiler", "Servicios (luz, agua, internet)", "Sueldos", "Impuestos", "Transporte", "Publicidad", "Mantenimiento", "Comisiones bancarias", "Otros"];
 const LOC = (navigator.language || "").startsWith("es") ? navigator.language : "es-AR";
-// Separadores del idioma, pero agrupando siempre los miles ("4.500", no "4500" como hace el español por defecto).
-const SEP = (() => { try { const p = new Intl.NumberFormat(LOC).formatToParts(1234567.5); return { g: p.find(x => x.type === "group")?.value || ".", d: p.find(x => x.type === "decimal")?.value || "," }; } catch (e) { return { g: ".", d: "," }; } })();
+// Formato chileno siempre ("4.500" y "2,5"), aunque el computador esté en otro español que usa "4,500".
+const SEP = { g: ".", d: "," };
 function fnum(n, dec) {
   const r = Math.round(Math.abs(n) * 10 ** dec) / 10 ** dec;
   const [ent, frac] = r.toFixed(dec).split(".");
@@ -1083,7 +1083,7 @@ async function seguro(fn, okMsg) {
 /* ===================== tickets ===================== */
 function ticketHTML(v) {
   const n = negocio();
-  return `<div class="receipt"><div class="c"><b>${esc(n.nombre || "Vendímetro")}</b></div>${n.doc ? `<div class="c">RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
+  return `<div class="receipt">${n.nombre ? `<div class="c"><b>${esc(n.nombre)}</b></div>` : ""}${n.doc ? `<div class="c">RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
     <div class="r"><span>Ticket ${v.folio ? "#" + v.folio : ""}</span><span>${fechaCorta(v.fecha)} ${esc(v.hora)}</span></div><div>Cliente: ${esc(nombreCli(v))}</div>${(() => { const c = S.data.clientes[v.cli]; if (!c) return ""; const dir = [c.dir, c.comuna].filter(Boolean).join(", "); return (c.doc ? `<div>RUT: ${esc(c.doc)}</div>` : "") + (dir ? `<div>Dirección: ${esc(dir)}</div>` : ""); })()}<hr>
     ${(v.items || []).map(i => `<div>${esc(i.nombre)}</div><div class="r"><span>  ${nf.format(i.cant)} × ${money(i.precio)}</span><span>${money(i.cant * i.precio)}</span></div>`).join("")}<hr>
     <div class="r"><span>Subtotal</span><span>${money(v.sub)}</span></div>${v.desc ? `<div class="r"><span>Descuento</span><span>−${money(v.desc)}</span></div>` : ""}
@@ -1110,17 +1110,17 @@ function notaHTML(v) {
     .it th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #111;padding:6px 6px}.it td{padding:6px;border-bottom:1px solid #ddd}.n,.it th.n{text-align:right;white-space:nowrap}
     @media screen{body{max-width:210mm;margin:0 auto;padding:16mm}}
     .tot{margin-top:12px;margin-left:auto;width:280px}.tot td{padding:4px 6px}.tot .g td{font-size:16px;font-weight:700;border-top:2px solid #111}
-    .pie{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;color:#555;font-size:11px;display:flex;justify-content:space-between;gap:16px}
+    .pie{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;color:#555;font-size:12px;text-align:center}
     .anul{color:#b00;font-weight:700;font-size:16px;text-align:center;border:2px solid #b00;padding:6px;margin-top:12px}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>Nota de venta ${folio}</title><style>${css}</style></head><body>
-    <div class="top"><div class="neg"><b>${esc(n.nombre || "Vendímetro")}</b>${n.doc ? `<div>RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div>${esc(n.dir)}</div>` : ""}${n.tel ? `<div>Tel. ${esc(n.tel)}</div>` : ""}</div>
-      <div class="doc"><b>NOTA DE VENTA</b><div class="num">N° ${folio}</div><div>${fechaCorta(v.fecha)}${v.hora ? " · " + esc(v.hora) : ""}</div></div></div>
+    <div class="top"><div class="neg">${n.nombre ? `<b>${esc(n.nombre)}</b>` : ""}${n.doc ? `<div>RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div>${esc(n.dir)}</div>` : ""}${n.tel ? `<div>Tel. ${esc(n.tel)}</div>` : ""}</div>
+      <div class="doc"><b>NOTA DE VENTA</b><div class="num">N° ${folio}</div><div>${fechaCorta(v.fecha)}</div></div></div>
     <h2>Cliente</h2><table class="cli">${filaCli("Nombre", nombreCli(v))}${c ? filaCli("RUT", c.doc) + filaCli("Dirección", [c.dir, c.comuna].filter(Boolean).join(", ")) + filaCli("Teléfono", c.tel) + filaCli("Email", c.email) : ""}</table>
     <h2>Detalle</h2><table class="it"><thead><tr><th class="n">Cant.</th><th>Código</th><th>Descripción</th><th class="n">Precio unit.</th><th class="n">Total</th></tr></thead><tbody>${items}</tbody></table>
     <table class="tot"><tr><td>Subtotal</td><td class="n">${money(v.sub)}</td></tr>${v.desc ? `<tr><td>Descuento</td><td class="n">−${money(v.desc)}</td></tr>` : ""}<tr class="g"><td>TOTAL</td><td class="n">${money(v.total)}</td></tr>
       <tr><td>Forma de pago</td><td class="n">${PAGOS[v.pago] || esc(v.pago)}</td></tr>${v.pago === "efectivo" && v.recibido ? `<tr><td>Recibido</td><td class="n">${money(v.recibido)}</td></tr><tr><td>Vuelto</td><td class="n">${money(v.recibido - v.total)}</td></tr>` : ""}</table>
     ${v.nota ? `<h2>Nota</h2><div>${esc(v.nota)}</div>` : ""}${v.estado === "anulada" ? `<div class="anul">VENTA ANULADA</div>` : ""}
-    <div class="pie"><span>${esc(n.pie || "¡Gracias por su compra!")}</span><span>Comprobante interno. No válido como documento tributario.</span></div></body></html>`;
+    <div class="pie">${esc(n.pie || "¡Gracias por su compra!")}</div></body></html>`;
 }
 async function imprimirDoc(html, nombre) {
   if (S.info.plataforma === "darwin") {
@@ -1152,8 +1152,8 @@ async function pedirAdmin(motivo, fn) {
   adminPendiente = fn;
   if (!definido) {
     abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá cambiar precios.</p>
-      <form data-form="adminCrear" class="fgrid"><div class="fld"><label for="admNuevo">Código nuevo (4 a 8 números)</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
-      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <form data-form="adminCrear" class="fgrid"><div class="fld"><label for="admNuevo">Código nuevo</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">De 4 a 8 números</span></div>
+      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">&nbsp;</span></div>
       <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Crear código</button></div></form>`);
   } else {
     abrir("Código de administrador", `<p>Para ${esc(motivo)} escribe el código de administrador.</p>
@@ -1279,8 +1279,8 @@ const ACT = {
   adminCambiar: () => {
     api("POST", "/api/pin", { accion: "estado" }).then(r => abrir(r.definido ? "Cambiar código de administrador" : "Crear código de administrador", `<form data-form="adminCambiar" class="fgrid">
       ${r.definido ? `<div class="fld w2"><label for="admActual">Código actual</label><input id="admActual" type="password" inputmode="numeric" autocomplete="off" maxlength="8" required></div>` : ""}
-      <div class="fld"><label for="admNuevo">Código nuevo (4 a 8 números)</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
-      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required></div>
+      <div class="fld"><label for="admNuevo">Código nuevo</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">De 4 a 8 números</span></div>
+      <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">&nbsp;</span></div>
       <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Guardar código</button></div></form>`)).catch(() => toast("No se pudo consultar el código.", true));
   },
   posQ: id => {
