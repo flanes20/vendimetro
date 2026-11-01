@@ -471,7 +471,7 @@ function porProducto(list) {
     const f = v.sub ? v.total / v.sub : 1;
     for (const it of v.items || []) {
       const p = S.data.productos[it.pid];
-      const r = m[it.pid] ||= { pid: it.pid, nombre: p?.nombre || it.nombre, cat: p?.cat || it.cat || "Sin categoría", cant: 0, total: 0, costo: 0 };
+      const r = m[it.pid] = m[it.pid] || { pid: it.pid, nombre: p?.nombre || it.nombre, cat: p?.cat || it.cat || "Sin categoría", cant: 0, total: 0, costo: 0 };
       r.cant += it.cant; r.total += it.cant * it.precio * f; r.costo += it.cant * it.costo;
     }
   }
@@ -479,7 +479,7 @@ function porProducto(list) {
 }
 function agrupar(list, keyFn, nameFn) {
   const m = {};
-  for (const x of list) { const k = keyFn(x); const r = m[k] ||= { k, nombre: nameFn(x, k), n: 0, total: 0, costo: 0, cant: 0 }; r.n++; r.total += x.total; r.costo += x.costo; r.cant += x.cant || 0; }
+  for (const x of list) { const k = keyFn(x); const r = m[k] = m[k] || { k, nombre: nameFn(x, k), n: 0, total: 0, costo: 0, cant: 0 }; r.n++; r.total += x.total; r.costo += x.costo; r.cant += x.cant || 0; }
   return Object.values(m).sort((a, b) => b.total - a.total);
 }
 const nombreCli = v => S.data.clientes[v.cli]?.nombre || v.cliNombre || "Consumidor final";
@@ -487,6 +487,11 @@ function saldoCli(id) {
   const deuda = M().ventas.filter(v => okV(v) && v.pago === "fiado" && v.cli === id).reduce((a, v) => a + v.total, 0);
   const pag = M().abonos.filter(a => a.cli === id).reduce((a, x) => a + num(x.monto), 0);
   return deuda - pag;
+}
+// Se puede vender aunque el stock cargado no alcance (queda en negativo hasta cargar la compra).
+function avisoStock(p, cant) {
+  const s = p.stock || 0;
+  if (cant > s) toast(s > 0 ? `De ${p.nombre} tenías ${nf.format(s)} en stock; quedará en negativo.` : `${p.nombre} no tiene stock cargado; se vende igual y el stock queda en negativo.`);
 }
 function stockChip(p) {
   const s = p.stock || 0;
@@ -771,7 +776,7 @@ function calcPos() {
 function posGrid() {
   const q = S.pos.q.trim().toLowerCase();
   const list = prodsOrden().filter(([, p]) => (!S.pos.cat || p.cat === S.pos.cat) && (!q || p.nombre.toLowerCase().includes(q) || (p.codigo || "").toLowerCase().includes(q)));
-  $("#posGrid").innerHTML = list.map(([id, p]) => `<button class="pcard" data-act="posAdd" data-id="${id}"${(p.stock || 0) <= 0 ? " disabled" : ""}><span class="nm">${esc(p.nombre)}</span><span class="meta"><span>${esc(p.codigo || p.cat || "")}</span>${stockChip(p)}</span><span class="pr">${money(p.precio)}</span></button>`).join("")
+  $("#posGrid").innerHTML = list.map(([id, p]) => `<button class="pcard" data-act="posAdd" data-id="${id}"><span class="nm">${esc(p.nombre)}</span><span class="meta"><span>${esc(p.codigo || p.cat || "")}</span>${stockChip(p)}</span><span class="pr">${money(p.precio)}</span></button>`).join("")
     || `<p class="empty" style="grid-column:1/-1">${Object.keys(S.data.productos).length ? "Ningún producto coincide con la búsqueda" : "Primero carga productos en la sección Productos"}</p>`;
 }
 function etiquetaPrecio(it, p) {
@@ -908,7 +913,7 @@ function pgReportes() {
 
   const prods = porProducto(vs);
   CSV.rep_producto = [["Producto", "Categoría", "Unidades", "Ventas", "Costo", "Ganancia", "Margen %", "% de las ventas"], ...prods.map(p => [p.nombre, p.cat, p.cant, p.total, p.costo, p.total - p.costo, p.total ? Math.round((p.total - p.costo) / p.total * 1000) / 10 : "", t.total ? Math.round(p.total / t.total * 1000) / 10 : ""])];
-  const cats = {}; prods.forEach(p => { const c = cats[p.cat] ||= { nombre: p.cat, cant: 0, total: 0, costo: 0 }; c.cant += p.cant; c.total += p.total; c.costo += p.costo; });
+  const cats = {}; prods.forEach(p => { const c = cats[p.cat] = cats[p.cat] || { nombre: p.cat, cant: 0, total: 0, costo: 0 }; c.cant += p.cant; c.total += p.total; c.costo += p.costo; });
   const catL = Object.values(cats).sort((x, y) => y.total - x.total);
   CSV.rep_categoria = [["Categoría", "Unidades", "Ventas", "Costo", "Ganancia", "Margen %"], ...catL.map(c => [c.nombre, c.cant, c.total, c.costo, c.total - c.costo, c.total ? Math.round((c.total - c.costo) / c.total * 1000) / 10 : ""])];
   const clis = agrupar(vs, v => v.cli || "_", v => nombreCli(v));
@@ -1227,7 +1232,7 @@ const ACT = {
   posAdd: id => {
     const p = S.data.productos[id]; if (!p) return;
     const it = S.pos.items.find(x => x.pid === id), ya = it ? it.cant : 0;
-    if (ya + 1 > (p.stock || 0)) return toast(`Solo hay ${nf.format(p.stock || 0)} de ${p.nombre} en stock.`, true);
+    avisoStock(p, ya + 1);
     if (it) it.cant++; else S.pos.items.push({ pid: id, cant: 1, precio: precioPara(id) });
     posTicket();
   },
@@ -1260,7 +1265,7 @@ const ACT = {
   posQ: id => {
     const [i, d] = id.split("|").map(Number), it = S.pos.items[i], p = S.data.productos[it.pid];
     const n = it.cant + d; if (n < 1) return;
-    if (n > (p?.stock || 0)) return toast(`Solo hay ${nf.format(p?.stock || 0)} en stock.`, true);
+    if (d > 0 && p) avisoStock(p, n);
     it.cant = n; posTicket();
   },
   posDel: id => { S.pos.items.splice(+id, 1); posTicket(); },
@@ -1270,7 +1275,7 @@ const ACT = {
   cobrar: async () => {
     const ps = S.pos, c = calcPos();
     if (!ps.items.length) return;
-    for (const it of ps.items) { const p = S.data.productos[it.pid]; if (!p) return toast("Un producto de la venta ya no existe. Quítalo.", true); if (it.cant > (p.stock || 0)) return toast(`No hay stock suficiente de ${p.nombre}.`, true); }
+    for (const it of ps.items) { const p = S.data.productos[it.pid]; if (!p) return toast("Un producto de la venta ya no existe. Quítalo.", true); }
     if (ps.pago === "fiado" && !ps.cli) return toast("Para recibir un cheque elige el cliente que lo entrega.", true);
     if (ps.pago === "efectivo" && ps.recibido !== "" && c.vuelto < 0) return toast(`El monto recibido no alcanza. Faltan ${money(-c.vuelto)}.`, true);
     const fecha = ps.fecha || hoy();
@@ -1286,7 +1291,8 @@ const ACT = {
       await guardar("config", "negocio", { ...negocio(), folio });
       for (const it of venta.items) await moverStock(it.pid, -it.cant);
     });
-    if (ok) {
+    if (!ok) { $("#posCobrar").disabled = false; return; }
+    {
       Object.assign(S.pos, { items: [], desc: "", recibido: "", nota: "", cli: "", pago: "efectivo" }); S.adminHasta = 0;
       render(); verVenta({ ...venta, fecha }, true);
       if (negocio().impAuto) imprimirVenta({ ...venta, fecha });
@@ -1628,10 +1634,10 @@ function demoData() {
     d.dias[f] = { ventas: ventas.sort((a, b) => a.hora.localeCompare(b.hora)) };
     if (x.getDate() === 1 || x.getDate() === 15) {
       const k = f.slice(0, 7), its = [0, 1, 4, 7, 12].map(i => ({ pid: "dp" + i, nombre: prods[i][0], cant: 20 + Math.floor(r() * 30), costo: prods[i][2] }));
-      (d.compras[k] ||= { lista: [] }).lista.push({ id: "dk" + f, fecha: f, prov: "ds" + Math.floor(r() * 3), items: its, total: its.reduce((a, i) => a + i.cant * i.costo, 0), nota: "Factura A-" + (1000 + folio % 900) });
+      (d.compras[k] = d.compras[k] || { lista: [] }).lista.push({ id: "dk" + f, fecha: f, prov: "ds" + Math.floor(r() * 3), items: its, total: its.reduce((a, i) => a + i.cant * i.costo, 0), nota: "Factura A-" + (1000 + folio % 900) });
     }
     if (x.getDate() === 5) {
-      const k = f.slice(0, 7), gl = (d.gastos[k] ||= { lista: [] }).lista;
+      const k = f.slice(0, 7), gl = (d.gastos[k] = d.gastos[k] || { lista: [] }).lista;
       gl.push({ id: "dg1" + k, fecha: f, cat: "Alquiler", desc: "Alquiler del local", monto: 180000, pago: "transferencia" });
       gl.push({ id: "dg2" + k, fecha: f, cat: "Servicios (luz, agua, internet)", desc: "Luz e internet", monto: 28000 + Math.round(r() * 12000), pago: "debito" });
       gl.push({ id: "dg3" + k, fecha: f, cat: "Sueldos", desc: "Sueldo empleado", monto: 320000, pago: "transferencia" });
@@ -1640,7 +1646,7 @@ function demoData() {
       const k = f.slice(0, 7), mes = f.slice(0, 7);
       for (const c of Object.keys(d.clientes)) {
         const deuda = Object.entries(d.dias).filter(([dd]) => dd.startsWith(mes)).flatMap(([, v]) => v.ventas).filter(v => v.cli === c && v.pago === "fiado").reduce((a, v) => a + v.total, 0);
-        if (deuda) (d.abonos[k] ||= { lista: [] }).lista.push({ id: "db" + f + c, fecha: f, cli: c, monto: Math.round(deuda * (0.8 + r() * 0.2)), pago: "efectivo" });
+        if (deuda) (d.abonos[k] = d.abonos[k] || { lista: [] }).lista.push({ id: "db" + f + c, fecha: f, cli: c, monto: Math.round(deuda * (0.8 + r() * 0.2)), pago: "efectivo" });
       }
     }
   }

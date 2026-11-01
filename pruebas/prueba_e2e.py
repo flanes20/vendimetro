@@ -120,6 +120,14 @@ def correr(w):
     r = json.loads(urllib.request.urlopen(urllib.request.Request(URL + "api/imprimir", data=json.dumps({"html": nota, "nombre": "nota-venta-2"}).encode(), method="POST", headers={"Content-Type": "application/json"})).read())
     ok("prepara la impresión para el navegador", r.get("ok") and Path(r["archivo"]).read_text(encoding="utf-8").startswith("<!doctype html>"))
 
+    # producto cargado sin stock: se puede vender igual y el stock queda en negativo
+    js(w, "ACT.editProd(''); $('#fpNombre').value='Pan amasado'; $('#fpPrecio').value='100'; FORM.prod(null,'');"); esperar(w)
+    pan = js(w, "Object.keys(S.data.productos).find(k=>S.data.productos[k].nombre==='Pan amasado')")
+    js(w, "ACT.go('pos')"); esperar(w, 0.5)
+    ok("producto sin stock se puede tocar en el punto de venta", js(w, f"!document.querySelector('[data-act=posAdd][data-id=\"{pan}\"]').disabled"))
+    js(w, f"ACT.posAdd('{pan}'); ACT.posAdd('{pan}'); ACT.cobrar();"); esperar(w, 2); js(w, "ACT.cerrar()")
+    ok("venta sin stock registrada, stock queda en -2", js(w, f"S.data.productos['{pan}'].stock") == -2 and js(w, "M().ventas.some(v=>v.folio===3)"))
+
     # recorrer todas las pantallas y todos los modos de período
     js(w, "for (const p of Object.keys(PAGES)) { S.page=p; for (const m of ['dia','mes','anio','rango']) { P.modo=m; render(); } } P.modo='mes';")
     js(w, "for (const t of ['producto','categoria','cliente','pago']) { S.repTab=t; S.page='reportes'; render(); }")
@@ -141,11 +149,11 @@ db = sqlite3.connect(TMP / "ventas.db")
 datos = {}
 for col, id_, data in db.execute("SELECT col, id, data FROM docs"):
     datos.setdefault(col, {})[id_] = json.loads(data)
-prod = list(datos["productos"].values())[0]
+prod = next(p for p in datos["productos"].values() if p["nombre"] == "Café 500 g")
 ventas = [v for d in datos.get("dias", {}).values() for v in d["ventas"]]
 v1 = next(v for v in ventas if v["folio"] == 1); v2 = next(v for v in ventas if v["folio"] == 2)
 ok("negocio guardado", datos["config"]["negocio"]["nombre"] == "Almacén Don Pepe")
-ok("2 ventas guardadas", len(ventas) == 2)
+ok("3 ventas guardadas", len(ventas) == 3)
 ok("venta 1 anulada y conservada", v1["estado"] == "anulada")
 ok("venta 1: total 540, recibido 1000", v1["total"] == 540 and v1["recibido"] == 1000)
 ok("venta 2: fiado con 10% desc = 324", v2["pago"] == "fiado" and abs(v2["total"] - 324) < 0.01, v2["total"])
@@ -155,7 +163,7 @@ ok("compra guardada", sum(len(d["lista"]) for d in datos.get("compras", {}).valu
 ok("gasto guardado", sum(len(d["lista"]) for d in datos.get("gastos", {}).values()) == 1)
 ok("merma y stock inicial en el historial", sum(len(d["lista"]) for d in datos.get("ajustes", {}).values()) == 2)
 ok("pago de cliente guardado", sum(len(d["lista"]) for d in datos.get("abonos", {}).values()) == 1)
-ok("folio siguiente = 2", datos["config"]["negocio"]["folio"] == 2)
+ok("último folio = 3", datos["config"]["negocio"]["folio"] == 3)
 ok("copia de seguridad diaria creada", any((TMP / "Respaldos").glob("*_auto.db")))
 admin = datos["config"].get("admin", {})
 ok("código guardado cifrado, nunca a la vista", bool(admin.get("hash")) and bool(admin.get("sal")) and "4321" not in json.dumps(admin))
