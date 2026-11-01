@@ -297,6 +297,27 @@ details.more[open] summary { margin-bottom: 10px; }
 @media (prefers-reduced-motion: no-preference) { .btn, .pcard, .nav button { transition: background .15s, border-color .15s, box-shadow .15s, filter .15s; } }
 .offline { margin: 40px auto; max-width: 560px; }
 </style>
+<script>
+// Va primero y en JavaScript simple: así también anota el error si un Mac antiguo no puede leer el resto del programa.
+(function () {
+  function anotar(mensaje, detalle) {
+    var pantalla = "inicio";
+    try { pantalla = S.page; } catch (e) {}
+    try {
+      var x = new XMLHttpRequest(); x.open("POST", "/api/error"); x.setRequestHeader("Content-Type", "application/json");
+      x.send(JSON.stringify({ pantalla: pantalla, mensaje: String(mensaje), detalle: String(detalle || ""), navegador: navigator.userAgent }));
+    } catch (e) {}
+    try { toast("Algo falló en esta pantalla. Quedó anotado en errores.txt (Ajustes → Abrir carpeta de datos).", true); }
+    catch (e) {
+      var d = document.getElementById("errFatal");
+      if (!d && document.body) { d = document.createElement("div"); d.id = "errFatal"; d.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;z-index:99;padding:12px 14px;border-radius:8px;background:#c2362b;color:#fff;font:14px system-ui,sans-serif"; document.body.appendChild(d); }
+      if (d) d.textContent = "Vendímetro no pudo cargar bien en este computador: " + mensaje;
+    }
+  }
+  window.addEventListener("error", function (e) { anotar(e.message, (e.error && e.error.stack) || (e.filename + ":" + e.lineno)); });
+  window.addEventListener("unhandledrejection", function (e) { var r = e.reason || {}; anotar(r.message || r, r.stack); });
+})();
+</script>
 </head>
 <body>
 
@@ -754,7 +775,7 @@ function pgPos() {
   <section class="card ticket">
     <div class="card-h"><h2>Venta actual</h2><button class="btn sm ghost" data-act="posVaciar">Vaciar</button></div>
     <div class="card-b">
-      <div class="fld"><label for="posCli">Cliente</label><select id="posCli"><option value="">Consumidor final</option>${clis.map(([id, c]) => `<option value="${id}"${ps.cli === id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></div>
+      <div class="fld"><div class="row between"><label class="lbl" for="posCli">Cliente</label><button class="btn sm ghost" data-act="posNuevoCli">${ico("plus")}Nuevo cliente</button></div><select id="posCli"><option value="">Consumidor final</option>${clis.map(([id, c]) => `<option value="${id}"${ps.cli === id ? " selected" : ""}>${esc(c.nombre)}</option>`).join("")}<option value="__nuevo">+ Crear cliente nuevo…</option></select></div>
       <div class="lines" id="posLines"></div>
       <div class="row"><div class="fld" style="flex:1"><label for="posDesc">Descuento</label><input id="posDesc" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(ps.desc)}" placeholder="0"></div><div class="seg" style="align-self:flex-end"><button data-act="posDescT" data-id="%" aria-pressed="${ps.descTipo === "%"}">%</button><button data-act="posDescT" data-id="$" aria-pressed="${ps.descTipo === "$"}">${esc(cur())}</button></div></div>
       <dl class="totals" id="posTot"></dl>
@@ -1390,7 +1411,9 @@ const ACT = {
   // clientes
   cliSel: id => { S.cliSel = S.cliSel === id ? null : id; render(); if (S.cliSel) $("#cliDet")?.scrollIntoView({ behavior: "smooth", block: "start" }); },
   cliCerrar: () => { S.cliSel = null; render(); },
+  posNuevoCli: () => { ACT.editCli(""); S.cliDesdePos = true; },
   editCli: id => {
+    S.cliDesdePos = false;
     const c = id ? S.data.clientes[id] : {};
     abrir(id ? "Editar cliente" : "Nuevo cliente", `<form data-form="cli" data-id="${id}" class="fgrid"><div class="fld w2"><label for="fcNombre">Nombre o razón social</label><input id="fcNombre" required value="${esc(c.nombre || "")}"></div>
       <div class="fld"><label for="fcDoc">RUT</label><input id="fcDoc" value="${esc(c.doc || "")}" placeholder="12.345.678-5" autocomplete="off"><span class="hint" id="fcDocHint">Opcional</span></div>
@@ -1467,7 +1490,11 @@ const FORM = {
       if (otro) { $("#fcDoc").focus(); return toast(`Ya hay un cliente con el RUT ${r.fmt}: ${otro[1].nombre}.`, true); }
     }
     const d = { ...(id ? S.data.clientes[id] : {}), nombre: $("#fcNombre").value.trim(), doc: r.fmt, tel: $("#fcTel").value.trim(), dir: $("#fcDir").value.trim(), comuna: $("#fcComuna").value.trim(), email: $("#fcEmail").value.trim() };
-    if (await seguro(() => guardar("clientes", id || uid("c"), d), "Cliente guardado")) cerrar();
+    const cid = id || uid("c"), paraVenta = !id && S.cliDesdePos;
+    if (await seguro(() => guardar("clientes", cid, d), paraVenta ? `${d.nombre} creado y elegido para esta venta` : "Cliente guardado")) {
+      if (paraVenta) { S.pos.cli = cid; for (const it of S.pos.items) if (!it.manual) it.precio = precioPara(it.pid); }
+      S.cliDesdePos = false; cerrar(); render();
+    }
   },
   abono: async (f, id) => {
     const fecha = $("#abFecha").value || hoy(), monto = num($("#abMonto").value);
@@ -1564,6 +1591,7 @@ document.addEventListener("change", e => {
   else if (id === "perDesde") { if (t.value) { P.desde = t.value; render(); } }
   else if (id === "perHasta") { if (t.value) { P.hasta = t.value; render(); } }
   else if ((id === "fcDoc" || id === "nDoc") && rut(t.value).ok) { t.value = rut(t.value).fmt; rutHint(t); }
+  else if (id === "posCli" && t.value === "__nuevo") { t.value = S.pos.cli; ACT.posNuevoCli(); }
   else if (id === "posCli") {
     // al cambiar de cliente, cada producto toma el precio especial de ese cliente (o el normal), salvo los cambiados a mano
     S.pos.cli = t.value;

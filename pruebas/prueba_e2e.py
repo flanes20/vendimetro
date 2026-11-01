@@ -128,6 +128,19 @@ def correr(w):
     js(w, f"ACT.posAdd('{pan}'); ACT.posAdd('{pan}'); ACT.cobrar();"); esperar(w, 2); js(w, "ACT.cerrar()")
     ok("venta sin stock registrada, stock queda en -2", js(w, f"S.data.productos['{pan}'].stock") == -2 and js(w, "M().ventas.some(v=>v.folio===3)"))
 
+    # crear un cliente desde el punto de venta: queda guardado y elegido en la venta
+    js(w, "ACT.go('pos'); const sel=$('#posCli'); sel.value='__nuevo'; sel.dispatchEvent(new Event('change',{bubbles:true}));"); esperar(w, 0.5)
+    ok("la opción de crear cliente abre el formulario", js(w, "$('#dlgT').textContent") == "Nuevo cliente")
+    js(w, "$('#fcNombre').value='Rosa Díaz'; FORM.cli(null,'');"); esperar(w)
+    nuevo = js(w, "Object.keys(S.data.clientes).find(k=>S.data.clientes[k].nombre==='Rosa Díaz')")
+    ok("cliente creado desde la venta y elegido", bool(nuevo) and js(w, "S.pos.cli") == nuevo and js(w, "$('#posCli').value") == nuevo)
+    js(w, "S.pos.cli=''; render();")
+
+    # los errores de pantalla se anotan en errores.txt
+    js(w, "setTimeout(()=>{throw new Error('error de prueba')},0)"); esperar(w)
+    ok("error anotado en errores.txt", "error de prueba" in (TMP / "errores.txt").read_text(encoding="utf-8") if (TMP / "errores.txt").exists() else False)
+    js(w, "window.__err=window.__err.filter(e=>!String(e).includes('error de prueba'))")
+
     # recorrer todas las pantallas y todos los modos de período
     js(w, "for (const p of Object.keys(PAGES)) { S.page=p; for (const m of ['dia','mes','anio','rango']) { P.modo=m; render(); } } P.modo='mes';")
     js(w, "for (const t of ['producto','categoria','cliente','pago']) { S.repTab=t; S.page='reportes'; render(); }")

@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 PUERTO = 8765
-VERSION = "1.8"
+VERSION = "1.9"
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
 DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
@@ -133,6 +133,18 @@ def operar_pin(cuerpo):
     return {"ok": False, "error": "Acción desconocida."}
 
 
+def anotar_error(cuerpo):
+    """Guarda los errores de la pantalla en errores.txt, para poder revisarlos si algo no funciona."""
+    linea = f"{datetime.now():%Y-%m-%d %H:%M:%S} [{VERSION} {sys.platform}] " + " | ".join(
+        str(cuerpo.get(k, ""))[:2000] for k in ("pantalla", "mensaje", "detalle", "navegador"))
+    archivo = CARPETA / "errores.txt"
+    with bloqueo:
+        if archivo.exists() and archivo.stat().st_size > 1_000_000:
+            archivo.replace(CARPETA / "errores-anterior.txt")
+        with archivo.open("a", encoding="utf-8") as f:
+            f.write(linea + "\n")
+
+
 def imprimir_en_navegador(html, nombre):
     """En Mac la ventana del programa no imprime: se abre la venta en el navegador, que sí lo hace."""
     carpeta = Path(tempfile.gettempdir()) / "vendimetro-impresion"
@@ -218,13 +230,16 @@ class Manejador(BaseHTTPRequestHandler):
         self.responder(200, {"ok": True})
 
     def do_POST(self):
-        if self.path in ("/api/pin", "/api/imprimir"):
+        if self.path in ("/api/pin", "/api/imprimir", "/api/error"):
             try:
                 cuerpo = self.leer_json()
             except (ValueError, UnicodeDecodeError):
                 return self.responder(400, {"error": "datos inválidos"})
             if self.path == "/api/pin":
                 return self.responder(200, operar_pin(cuerpo))
+            if self.path == "/api/error":
+                anotar_error(cuerpo)
+                return self.responder(200, {"ok": True})
             archivo = imprimir_en_navegador(str(cuerpo.get("html", "")), str(cuerpo.get("nombre", "venta")))
             return self.responder(200, {"ok": True, "archivo": str(archivo)})
         if self.path == "/api/respaldo":
