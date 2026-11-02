@@ -112,7 +112,7 @@ def pasos(w):
     ok("el precio normal del producto no cambia", js(w, f"S.data.productos['{pid}'].precio") == 180)
     js(w, f"ACT.posVaciar(); S.pos.cli=''; ACT.posAdd('{pid}');"); esperar(w)
     ok("sin cliente usa el precio normal", js(w, "S.pos.items[0].precio") == 180)
-    js(w, f"var s=$('#posCli'); s.value='{cid}'; s.dispatchEvent(new Event('change',{{bubbles:true}}));"); esperar(w)
+    js(w, f"ACT.posCliPick('{cid}')"); esperar(w)
     ok("al elegir el cliente aplica su precio especial", js(w, "S.pos.items[0].precio") == 150)
     js(w, "ACT.posPrecio(0)"); esperar(w)
     ok("la vez siguiente pide el código", js(w, "$('#dlgT').textContent") == "Código de administrador")
@@ -152,11 +152,15 @@ def pasos(w):
     js(w, "S.adminHasta=0; ACT.cerrar();")
 
     # crear un cliente desde el punto de venta: queda guardado y elegido en la venta
-    js(w, "ACT.go('pos'); const sel=$('#posCli'); sel.value='__nuevo'; sel.dispatchEvent(new Event('change',{bubbles:true}));"); esperar(w)
-    ok("la opción de crear cliente abre el formulario", js(w, "$('#dlgT').textContent") == "Nuevo cliente")
-    js(w, "$('#fcNombre').value='Rosa Díaz'; FORM.cli(null,'');"); esperar(w)
+    js(w, "ACT.go('pos'); const q=$('#posCliQ'); q.focus(); q.value='gomez'; q.dispatchEvent(new Event('input',{bubbles:true}));"); esperar(w, 0.5)
+    ok("el buscador de clientes encuentra sin tildes ni mayúsculas", "María Gómez" in (js(w, "$('#posCliList').textContent") or "") and js(w, "!$('#posCliList').hidden"), js(w, "$('#posCliList').textContent"))
+    js(w, "const q=$('#posCliQ'); q.value='12.345.678'; q.dispatchEvent(new Event('input',{bubbles:true}));"); esperar(w, 0.5)
+    ok("y también por RUT", "Juan Pérez" in (js(w, "$('#posCliList').textContent") or ""))
+    js(w, "const q=$('#posCliQ'); q.value='Rosa Díaz'; q.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#posCliList .nuevo').click();"); esperar(w)
+    ok("crear cliente desde el buscador abre el formulario con el nombre escrito", js(w, "$('#dlgT').textContent") == "Nuevo cliente" and js(w, "$('#fcNombre').value") == "Rosa Díaz")
+    js(w, "FORM.cli(null,'');"); esperar(w)
     nuevo = js(w, "Object.keys(S.data.clientes).find(k=>S.data.clientes[k].nombre==='Rosa Díaz')")
-    ok("cliente creado desde la venta y elegido", bool(nuevo) and js(w, "S.pos.cli") == nuevo and js(w, "$('#posCli').value") == nuevo)
+    ok("cliente creado desde la venta y elegido", bool(nuevo) and js(w, "S.pos.cli") == nuevo and js(w, "$('#posCliQ').value") == "Rosa Díaz")
     js(w, "S.pos.cli=''; render();")
 
     # los errores de pantalla se anotan en errores.txt
