@@ -190,6 +190,8 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--line); border-bottom: 0
 .chip.low { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .chip.out { background: var(--crit-soft); color: var(--crit); border-color: transparent; }
 .chip.acc { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+button.chip { cursor: pointer; font-family: inherit; }
+button.chip:hover { box-shadow: 0 0 0 2px var(--line); }
 
 /* ---------- gráficos ---------- */
 .chart { overflow-x: auto; }
@@ -828,13 +830,13 @@ function postPos() { posGrid(); posTicket(); }
 
 function pgVentas() {
   const [a, b] = rango(), q = S.ventaQ.trim().toLowerCase();
-  const list = M().ventas.filter(v => v.fecha >= a && v.fecha <= b && (!S.ventaPago || v.pago === S.ventaPago) && (!q || String(v.folio).includes(q) || nombreCli(v).toLowerCase().includes(q) || (v.items || []).some(i => i.nombre.toLowerCase().includes(q))));
+  const list = M().ventas.filter(v => v.fecha >= a && v.fecha <= b && (!S.ventaPago || v.pago === S.ventaPago) && (S.ventaEstado == null || S.ventaEstado === "*" || estadoPago(v) === S.ventaEstado) && (!q || String(v.folio).includes(q) || nombreCli(v).toLowerCase().includes(q) || (v.items || []).some(i => i.nombre.toLowerCase().includes(q))));
   const ok = tot(list.filter(okV)), prev = tot(ventasEn(...rangoPrevio()));
-  CSV.ventas = [["Folio", "Fecha", "Hora", "Cliente", "Productos", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Pago", "Estado"], ...list.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), (v.items || []).map(i => `${i.cant} x ${i.nombre}`).join(", "), v.sub, v.desc, v.total, v.costo, v.total - v.costo, PAGOS[v.pago] || v.pago, v.estado === "anulada" ? "Anulada" : "OK"])];
+  CSV.ventas = [["Folio", "Fecha", "Hora", "Cliente", "Productos", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Pago", "Estado"], ...list.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), (v.items || []).map(i => `${i.cant} x ${i.nombre}`).join(", "), v.sub, v.desc, v.total, v.costo, v.total - v.costo, PAGOS[v.pago] || v.pago, estadoTxt(v)])];
   return `<div class="kpis">${kpi("Ventas", money(ok.total), delta(ok.total, prev.total, etiquetaPrev()), "feat")}${kpi("Ganancia bruta", money(ok.ganancia), `margen ${pct(ok.total ? ok.ganancia / ok.total * 100 : NaN)}`)}${kpi("Nº de ventas", nf0.format(ok.n), `${list.length - ok.n} anuladas`)}${kpi("Ticket promedio", money(ok.ticket))}${kpi("Descuentos dados", money(ok.desc))}</div>
   ${card("Ventas · " + etiqueta(), `<div class="chart" id="chVentas"></div>`, { sub: "Ventas y ganancia bruta en el período" })}
-  ${card("Detalle de ventas", `<div class="row" style="padding:14px 18px 0"><input id="ventaQ" type="search" placeholder="Buscar folio, cliente o producto" value="${esc(S.ventaQ)}" style="max-width:320px"><select id="ventaPago" style="max-width:180px"><option value="">Todas las formas de pago</option>${Object.entries(PAGOS).map(([k, l]) => `<option value="${k}"${S.ventaPago === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
-    ${table(["Folio", "Fecha", "Cliente", "Productos", "Pago", "#Total", "#Ganancia", "Estado", ""], list.map(v => `<tr class="${v.estado === "anulada" ? "anul" : ""}"><td class="mono">${v.folio ? "#" + v.folio : "—"}</td><td class="nw">${fechaCorta(v.fecha)} <span class="muted">${esc(v.hora)}</span></td><td>${esc(nombreCli(v))}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || esc(v.pago)}</span></td><td class="n">${money(v.total)}</td><td class="n">${money(v.total - v.costo)}</td><td class="keep">${v.estado === "anulada" ? `<span class="chip out">Anulada</span>` : `<span class="chip ok">Pagada</span>`}</td><td><div class="t-acts"><button class="btn sm" data-act="verVenta" data-id="${v.fecha}|${v.id}">Ver</button><button class="btn sm" data-act="printVenta" data-id="${v.fecha}|${v.id}" title="Imprimir">${ico("print")}</button>${v.estado !== "anulada" ? `<button class="btn sm dan" data-act="anular" data-id="${v.fecha}|${v.id}">Anular</button>` : ""}</div></td></tr>`), "No hay ventas en este período", `<tr><td colspan="5">${ok.n} ventas válidas</td><td class="n">${money(ok.total)}</td><td class="n">${money(ok.ganancia)}</td><td colspan="2"></td></tr>`)}`, { flush: true, acts: csvBtn("ventas") })}`;
+  ${card("Detalle de ventas", `<div class="row" style="padding:14px 18px 0"><input id="ventaQ" type="search" placeholder="Buscar folio, cliente o producto" value="${esc(S.ventaQ)}" style="max-width:320px"><select id="ventaPago" style="max-width:230px"><option value="">Todas las formas de pago</option>${Object.entries(PAGOS).map(([k, l]) => `<option value="${k}"${S.ventaPago === k ? " selected" : ""}>${l}</option>`).join("")}</select><select id="ventaEstado" style="max-width:180px">${[["*", "Todos los estados"], ["", "Por confirmar"], ["si", "Pagadas"], ["no", "No pagadas"], ["anulada", "Anuladas"]].map(([k, l]) => `<option value="${k}"${(S.ventaEstado ?? "*") === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+    ${table(["Folio", "Fecha", "Cliente", "Productos", "Pago", "#Total", "#Ganancia", "Estado", ""], list.map(v => `<tr class="${v.estado === "anulada" ? "anul" : ""}"><td class="mono">${v.folio ? "#" + v.folio : "—"}</td><td class="nw">${fechaCorta(v.fecha)} <span class="muted">${esc(v.hora)}</span></td><td>${esc(nombreCli(v))}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || esc(v.pago)}</span></td><td class="n">${money(v.total)}</td><td class="n">${money(v.total - v.costo)}</td><td class="keep">${v.estado === "anulada" ? `<span class="chip out">Anulada</span>` : (([t, c]) => `<button class="chip ${c}" data-act="estadoPago" data-id="${v.fecha}|${v.id}" title="Cambiar estado de pago (administrador)">${t} ✎</button>`)(ESTADOS_PAGO[estadoPago(v)])}</td><td><div class="t-acts"><button class="btn sm" data-act="verVenta" data-id="${v.fecha}|${v.id}">Ver</button><button class="btn sm" data-act="printVenta" data-id="${v.fecha}|${v.id}" title="Imprimir">${ico("print")}</button>${v.estado !== "anulada" ? `<button class="btn sm dan" data-act="anular" data-id="${v.fecha}|${v.id}">Anular</button>` : ""}</div></td></tr>`), "No hay ventas en este período", `<tr><td colspan="5">${ok.n} ventas válidas</td><td class="n">${money(ok.total)}</td><td class="n">${money(ok.ganancia)}</td><td colspan="2"></td></tr>`)}`, { flush: true, acts: csvBtn("ventas") })}`;
 }
 function postVentas() { const [a, b] = rango(); chart($("#chVentas"), serie(ventasEn(a, b), a, b)); }
 
@@ -1092,8 +1094,8 @@ function ticketHTML(v) {
     ${v.nota ? `<hr><div>${esc(v.nota)}</div>` : ""}${v.estado === "anulada" ? `<hr><div class="c"><b>VENTA ANULADA</b></div>` : ""}<hr><div class="c">${esc(n.pie || "¡Gracias por su compra!")}</div></div>`;
 }
 function ticketDoc(v) {
-  const css = `body{font-family:ui-monospace,Consolas,monospace;font-size:13px;max-width:72mm;margin:0 auto;color:#000}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:12px}hr{border:0;border-top:1px dashed #555;margin:6px 0}.tot{font-size:16px;font-weight:bold}.receipt{display:flex;flex-direction:column;gap:3px}@page{size:80mm auto;margin:4mm}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Ticket ${v.folio || ""}</title><style>${css}</style></head><body>${ticketHTML(v)}</body></html>`;
+  const css = `body{font-family:ui-monospace,Consolas,monospace;font-size:13px;max-width:72mm;margin:0 auto;color:#000}.c{text-align:center}.r{display:flex;justify-content:space-between;gap:12px}hr{border:0;border-top:1px dashed #555;margin:6px 0}.tot{font-size:16px;font-weight:bold}.receipt{display:flex;flex-direction:column;gap:3px}@page{size:80mm auto;margin:0}@media print{body{padding:4mm}}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(negocio().nombre || "")}</title><style>${css}</style></head><body>${ticketHTML(v)}</body></html>`;
 }
 function notaHTML(v) {
   // Nota de venta en hoja A4: comprobante interno, con los datos completos del cliente.
@@ -1101,7 +1103,7 @@ function notaHTML(v) {
   const folio = v.folio ? String(v.folio).padStart(6, "0") : "—";
   const filaCli = (k, val) => val ? `<tr><th>${k}</th><td>${esc(val)}</td></tr>` : "";
   const items = (v.items || []).map(i => { const p = S.data.productos[i.pid]; return `<tr><td class="n">${nf.format(i.cant)}</td><td>${esc(p?.codigo || "")}</td><td>${esc(i.nombre)}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.cant * i.precio)}</td></tr>`; }).join("");
-  const css = `*{box-sizing:border-box}body{font-family:"Geist",Arial,Helvetica,sans-serif;font-size:12px;color:#111;margin:0}@page{size:A4;margin:16mm}
+  const css = `*{box-sizing:border-box}body{font-family:"Geist",Arial,Helvetica,sans-serif;font-size:12px;color:#111;margin:0}@page{size:A4;margin:0}@media print{body{padding:14mm 16mm}}
     .top{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:12px}
     .neg b{font-size:20px;display:block;margin-bottom:4px}.neg div{color:#333}
     .doc{border:2px solid #111;border-radius:6px;padding:10px 16px;text-align:center;min-width:190px}.doc b{display:block;font-size:13px;letter-spacing:.06em}.doc .num{font-size:20px;font-weight:700;margin:4px 0}
@@ -1112,9 +1114,9 @@ function notaHTML(v) {
     .tot{margin-top:12px;margin-left:auto;width:280px}.tot td{padding:4px 6px}.tot .g td{font-size:16px;font-weight:700;border-top:2px solid #111}
     .pie{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;color:#555;font-size:12px;text-align:center}
     .anul{color:#b00;font-weight:700;font-size:16px;text-align:center;border:2px solid #b00;padding:6px;margin-top:12px}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Nota de venta ${folio}</title><style>${css}</style></head><body>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(n.nombre || "")}</title><style>${css}</style></head><body>
     <div class="top"><div class="neg">${n.nombre ? `<b>${esc(n.nombre)}</b>` : ""}${n.doc ? `<div>RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div>${esc(n.dir)}</div>` : ""}${n.tel ? `<div>Tel. ${esc(n.tel)}</div>` : ""}</div>
-      <div class="doc"><b>NOTA DE VENTA</b><div class="num">N° ${folio}</div><div>${fechaCorta(v.fecha)}</div></div></div>
+      <div class="doc"><b>FECHA</b><div class="num">${fechaCorta(v.fecha)}</div></div></div>
     <h2>Cliente</h2><table class="cli">${filaCli("Nombre", nombreCli(v))}${c ? filaCli("RUT", c.doc) + filaCli("Dirección", [c.dir, c.comuna].filter(Boolean).join(", ")) + filaCli("Teléfono", c.tel) + filaCli("Email", c.email) : ""}</table>
     <h2>Detalle</h2><table class="it"><thead><tr><th class="n">Cant.</th><th>Código</th><th>Descripción</th><th class="n">Precio unit.</th><th class="n">Total</th></tr></thead><tbody>${items}</tbody></table>
     <table class="tot"><tr><td>Subtotal</td><td class="n">${money(v.sub)}</td></tr>${v.desc ? `<tr><td>Descuento</td><td class="n">−${money(v.desc)}</td></tr>` : ""}<tr class="g"><td>TOTAL</td><td class="n">${money(v.total)}</td></tr>
@@ -1167,6 +1169,10 @@ function adminOk() {
 }
 const precioPara = pid => { const esp = S.data.clientes[S.pos.cli]?.precios?.[pid]; return esp != null ? esp : S.data.productos[pid]?.precio || 0; };
 
+// Estado de pago: lo confirma el administrador (pagada: true / false; sin confirmar si no está).
+const ESTADOS_PAGO = { si: ["Pagada", "ok"], no: ["No pagada", "out"], "": ["Por confirmar", "low"] };
+const estadoPago = v => v.estado === "anulada" ? "anulada" : v.pagada === true ? "si" : v.pagada === false ? "no" : "";
+const estadoTxt = v => v.estado === "anulada" ? "Anulada" : ESTADOS_PAGO[estadoPago(v)][0];
 function buscarVenta(key) { const [f, id] = key.split("|"); return M().ventas.find(v => v.fecha === f && v.id === id); }
 function verVenta(v, nueva) {
   abrir(nueva ? "Venta registrada" : `Venta ${v.folio ? "#" + v.folio : ""}`, `${nueva ? `<div class="vuelto"><span>Cobrado</span><span>${money(v.total)}</span></div>` : ""}${nueva && v.pago === "efectivo" && v.recibido ? `<div class="vuelto"><span>Vuelto a entregar</span><span>${money(v.recibido - v.total)}</span></div>` : ""}${ticketHTML(v)}
@@ -1220,8 +1226,8 @@ const ACT = {
     const prods = prodsOrden().map(([, p]) => [p.codigo || "", p.nombre, p.cat || "", p.costo, p.precio, p.stock || 0, p.min ?? 5]);
     const vs = M().ventas.slice().reverse();
     exportarExcel(`Vendímetro - todo ${hoy()}.xlsx`, [
-      hoja("Ventas", [["Folio", "Fecha", "Hora", "Cliente", "Forma de pago", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Estado", "Nota"], ...vs.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), PAGOS[v.pago] || v.pago, v.sub, v.desc, v.total, v.costo, v.total - v.costo, v.estado === "anulada" ? "Anulada" : "OK", v.nota || ""])]),
-      hoja("Detalle de ventas", [["Folio", "Fecha", "Cliente", "Producto", "Categoría", "Cantidad", "Precio", "Costo", "Estado"], ...vs.flatMap(v => (v.items || []).map(i => [v.folio, v.fecha, nombreCli(v), i.nombre, i.cat || "", i.cant, i.precio, i.costo, v.estado === "anulada" ? "Anulada" : "OK"]))]),
+      hoja("Ventas", [["Folio", "Fecha", "Hora", "Cliente", "Forma de pago", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Estado", "Nota"], ...vs.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), PAGOS[v.pago] || v.pago, v.sub, v.desc, v.total, v.costo, v.total - v.costo, estadoTxt(v), v.nota || ""])]),
+      hoja("Detalle de ventas", [["Folio", "Fecha", "Cliente", "Producto", "Categoría", "Cantidad", "Precio", "Costo", "Estado"], ...vs.flatMap(v => (v.items || []).map(i => [v.folio, v.fecha, nombreCli(v), i.nombre, i.cat || "", i.cant, i.precio, i.costo, estadoTxt(v)]))]),
       hoja("Productos", [["Código", "Nombre", "Categoría", "Costo", "Precio", "Stock", "Stock mínimo"], ...prods]),
       hoja("Clientes", [["Nombre", "RUT", "Teléfono", "Email", "Dirección", "Comuna", "Saldo por cobrar"], ...Object.entries(S.data.clientes).map(([id, c]) => [c.nombre, c.doc || "", c.tel || "", c.email || "", c.dir || "", c.comuna || "", saldoCli(id)])]),
       hoja("Compras", [["Fecha", "Proveedor", "Producto", "Cantidad", "Costo", "Total", "Nota"], ...M().compras.slice().reverse().flatMap(c => c.items.map(i => [c.fecha, S.data.proveedores[c.prov]?.nombre || "", i.nombre, i.cant, i.costo, i.cant * i.costo, c.nota || ""]))]),
@@ -1325,6 +1331,16 @@ const ACT = {
   printA4: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "a4"); },
   printVenta: id => { const v = buscarVenta(id); if (v) imprimirVenta(v); },
   impFormato: id => seguro(() => guardar("config", "negocio", { ...negocio(), impFormato: id })),
+  estadoPago: id => {
+    const v = buscarVenta(id); if (!v) return;
+    pedirAdmin("confirmar si una venta está pagada", () => abrir(`Estado de pago · Venta ${v.folio ? "#" + v.folio : ""}`, `<p>${esc(nombreCli(v))} · ${fechaCorta(v.fecha)} · <b>${money(v.total)}</b> · ${PAGOS[v.pago] || esc(v.pago)}</p><p class="muted">Ahora: <b>${estadoTxt(v)}</b></p>
+      <div class="dlg-f"><button class="btn" data-act="fijarPago" data-id="${id}|">Por confirmar</button><button class="btn dan" data-act="fijarPago" data-id="${id}|no">No pagada</button><button class="btn pri" data-act="fijarPago" data-id="${id}|si">Pagada</button></div>`));
+  },
+  fijarPago: id => {
+    const [f, vid, val] = id.split("|");
+    seguro(() => cambiarEnLista("dias", f, vid, x => { const r = { ...x, pagadaEn: hoy() }; if (val === "si") r.pagada = true; else if (val === "no") r.pagada = false; else { delete r.pagada; delete r.pagadaEn; } return r; }),
+      `Venta marcada como ${ESTADOS_PAGO[val][0].toLowerCase()}`).then(ok => { if (ok) cerrar(); });
+  },
   anular: id => {
     const v = buscarVenta(id); if (!v) return;
     confirmar("Anular venta", `La venta ${v.folio ? "#" + v.folio : ""} de ${money(v.total)} quedará marcada como anulada y los productos volverán al stock. No se borra del historial.`, "Anular venta", () => seguro(async () => {
@@ -1604,6 +1620,7 @@ document.addEventListener("change", e => {
   else if (id === "prodBajo") { S.prodBajo = t.checked; render(); }
   else if (id === "impAuto") seguro(() => guardar("config", "negocio", { ...negocio(), impAuto: t.checked }), t.checked ? "Se imprimirá cada venta al cobrar" : "Ya no se imprimirá al cobrar");
   else if (id === "ventaPago") { S.ventaPago = t.value; render(); }
+  else if (id === "ventaEstado") { S.ventaEstado = t.value; render(); }
   else if (id === "cmpProd") { const p = S.data.productos[t.value]; if (p) $("#cmpCosto").placeholder = `Actual: ${money(p.costo)}`; }
 });
 document.addEventListener("keydown", e => {
@@ -1659,7 +1676,7 @@ function demoData() {
       const sub = items.reduce((a, i) => a + i.cant * i.precio, 0), desc = r() < 0.08 ? Math.round(sub * 0.1) : 0;
       ventas.push({ id: "dv" + f + k, folio: ++folio, hora: `${pad(8 + Math.floor(r() * 13))}:${pad(Math.floor(r() * 60))}`, cli, cliNombre: d.clientes[cli]?.nombre || "", items, sub, desc, total: sub - desc, costo: items.reduce((a, i) => a + i.cant * i.costo, 0), pago, recibido: 0, nota: "", estado: r() < 0.01 ? "anulada" : "ok" });
     }
-    d.dias[f] = { ventas: ventas.sort((a, b) => a.hora.localeCompare(b.hora)) };
+    d.dias[f] = { ventas: ventas.map(v => ({ ...v, pagada: true })).sort((a, b) => a.hora.localeCompare(b.hora)) };
     if (x.getDate() === 1 || x.getDate() === 15) {
       const k = f.slice(0, 7), its = [0, 1, 4, 7, 12].map(i => ({ pid: "dp" + i, nombre: prods[i][0], cant: 20 + Math.floor(r() * 30), costo: prods[i][2] }));
       (d.compras[k] = d.compras[k] || { lista: [] }).lista.push({ id: "dk" + f, fecha: f, prov: "ds" + Math.floor(r() * 3), items: its, total: its.reduce((a, i) => a + i.cant * i.costo, 0), nota: "Factura A-" + (1000 + folio % 900) });

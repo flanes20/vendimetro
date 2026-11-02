@@ -125,7 +125,7 @@ def pasos(w):
 
     # impresión: nota A4, ticket de 80 mm y apertura en el navegador (Mac)
     nota = js(w, "notaHTML(M().ventas.find(v=>v.folio===2))")
-    ok("nota A4 con número, cliente y total", all(x in nota for x in ["NOTA DE VENTA", "N° 000002", "María Gómez", "$324", "size:A4", "Gracias por su compra"]) and "Vendímetro" not in nota and "Comprobante interno" not in nota)
+    ok("nota A4 con fecha, cliente y total, sin número ni nombre del programa", all(x in nota for x in ["FECHA", "María Gómez", "$324", "size:A4;margin:0", "Gracias por su compra"]) and not any(x in nota for x in ["Vendímetro", "Comprobante interno", "NOTA DE VENTA", "000002"]))
     ok("ticket con tamaño de 80 mm", "size:80mm" in js(w, "ticketDoc(M().ventas.find(v=>v.folio===2))"))
     ok("miles con punto y decimales con coma", js(w, "nf0.format(1234567) + ' ' + nf.format(2.5)") == "1.234.567 2,5", js(w, "nf0.format(1234567)"))
     r = json.loads(urllib.request.urlopen(urllib.request.Request(URL + "api/imprimir", data=json.dumps({"html": nota, "nombre": "nota-venta-2"}).encode(), method="POST", headers={"Content-Type": "application/json"})).read())
@@ -138,6 +138,18 @@ def pasos(w):
     ok("producto sin stock se puede tocar en el punto de venta", js(w, f"!document.querySelector('[data-act=posAdd][data-id=\"{pan}\"]').disabled"))
     js(w, f"ACT.posAdd('{pan}'); ACT.posAdd('{pan}'); ACT.cobrar();"); esperar(w, 2); js(w, "ACT.cerrar()")
     ok("venta sin stock registrada, stock queda en -2", js(w, f"S.data.productos['{pan}'].stock") == -2 and js(w, "M().ventas.some(v=>v.folio===3)"))
+
+    # estado de pago: lo confirma el administrador desde el detalle de ventas
+    v2id = js(w, "(v=>v.fecha+'|'+v.id)(M().ventas.find(v=>v.folio===2))")
+    ok("venta nueva queda por confirmar", js(w, "estadoTxt(M().ventas.find(v=>v.folio===2))") == "Por confirmar")
+    js(w, "S.adminHasta=0"); js(w, f"ACT.estadoPago('{v2id}')"); esperar(w)
+    ok("cambiar el estado de pago pide el código", (js(w, "$('#dlgT').textContent") or "").startswith("Código de administrador"), js(w, "$('#dlgT').textContent"))
+    js(w, "S.adminHasta=Date.now()+60000; ACT.cerrar();"); js(w, f"ACT.estadoPago('{v2id}')"); esperar(w)
+    js(w, f"ACT.fijarPago('{v2id}|si')"); esperar(w)
+    ok("administrador marca la venta como pagada", js(w, "M().ventas.find(v=>v.folio===2).pagada") is True and js(w, "estadoTxt(M().ventas.find(v=>v.folio===2))") == "Pagada")
+    js(w, f"ACT.fijarPago('{v2id}|no')"); esperar(w)
+    ok("y como no pagada", js(w, "M().ventas.find(v=>v.folio===2).pagada") is False)
+    js(w, "S.adminHasta=0; ACT.cerrar();")
 
     # crear un cliente desde el punto de venta: queda guardado y elegido en la venta
     js(w, "ACT.go('pos'); const sel=$('#posCli'); sel.value='__nuevo'; sel.dispatchEvent(new Event('change',{bubbles:true}));"); esperar(w)
