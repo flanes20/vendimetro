@@ -139,6 +139,11 @@ def pasos(w):
     js(w, f"ACT.posAdd('{pan}'); ACT.posAdd('{pan}'); ACT.cobrar();"); esperar(w, 2); js(w, "ACT.cerrar()")
     ok("venta sin stock registrada, stock queda en -2", js(w, f"S.data.productos['{pan}'].stock") == -2 and js(w, "M().ventas.some(v=>v.folio===3)"))
 
+    # % de ventas por producto en la pantalla Ventas: las partes suman 100%
+    js(w, "ACT.go('ventas')"); esperar(w, 0.5)
+    filas = js(w, "JSON.stringify(CSV.pctProd.slice(1))")
+    ok("% de ventas por producto suma 100%", "% de ventas por producto" in (js(w, "$('#content').textContent") or "") and abs(sum(f[3] for f in json.loads(filas)) - 100) < 0.5, filas)
+
     # estado de pago: lo confirma el administrador desde el detalle de ventas
     v2id = js(w, "(v=>v.fecha+'|'+v.id)(M().ventas.find(v=>v.folio===2))")
     ok("venta nueva queda por confirmar", js(w, "estadoTxt(M().ventas.find(v=>v.folio===2))") == "Por confirmar")
