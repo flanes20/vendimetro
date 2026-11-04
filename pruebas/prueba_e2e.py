@@ -126,6 +126,7 @@ def pasos(w):
     # impresión: nota A4, ticket de 80 mm y apertura en el navegador (Mac)
     nota = js(w, "notaHTML(M().ventas.find(v=>v.folio===2))")
     ok("nota A4 con fecha, cliente y total, sin número ni nombre del programa", all(x in nota for x in ["FECHA", "María Gómez", "$324", "size:A4;margin:0", "Gracias por su compra"]) and not any(x in nota for x in ["Vendímetro", "Comprobante interno", "NOTA DE VENTA", "000002"]))
+    ok("nota con N° 1, 2, 3 y productos en orden alfabético, sin columna código", (lambda h: "<th>Código</th>" not in h and '<td class="nro">1</td><td>Abeja</td>' in h and '<td class="nro">2</td><td>mango</td>' in h and '<td class="nro">3</td><td>Zapallo</td>' in h)(js(w, "notaHTML({fecha:hoy(),items:[{nombre:'Zapallo',cant:1,precio:1},{nombre:'mango',cant:1,precio:1},{nombre:'Abeja',cant:1,precio:1}],sub:3,total:3,pago:'efectivo'})")))
     ok("ticket con tamaño de 80 mm", "size:80mm" in js(w, "ticketDoc(M().ventas.find(v=>v.folio===2))"))
     ok("miles con punto y decimales con coma", js(w, "nf0.format(1234567) + ' ' + nf.format(2.5)") == "1.234.567 2,5", js(w, "nf0.format(1234567)"))
     r = json.loads(urllib.request.urlopen(urllib.request.Request(URL + "api/imprimir", data=json.dumps({"html": nota, "nombre": "nota-venta-2"}).encode(), method="POST", headers={"Content-Type": "application/json"})).read())
@@ -143,6 +144,13 @@ def pasos(w):
     js(w, "ACT.go('ventas')"); esperar(w, 0.5)
     filas = js(w, "JSON.stringify(CSV.pctProd.slice(1))")
     ok("% de ventas por producto suma 100%", "% de ventas por producto" in (js(w, "$('#content').textContent") or "") and abs(sum(f[3] for f in json.loads(filas)) - 100) < 0.5, filas)
+
+    # eliminar un producto pide el código de administrador
+    js(w, f"S.adminHasta=0; ACT.delProd('{pan}')"); esperar(w)
+    ok("eliminar un producto pide el código", (js(w, "$('#dlgT').textContent") or "").startswith("Código de administrador"), js(w, "$('#dlgT').textContent"))
+    js(w, "$('#admPin').value='4321'; FORM.adminPin();"); esperar(w, 2)
+    ok("con el código pide confirmar la eliminación", js(w, "$('#dlgT').textContent") == "Eliminar producto", js(w, "$('#dlgT').textContent"))
+    js(w, "S.adminHasta=0; ACT.cerrar();")
 
     # estado de pago: lo confirma el administrador desde el detalle de ventas
     v2id = js(w, "(v=>v.fecha+'|'+v.id)(M().ventas.find(v=>v.folio===2))")

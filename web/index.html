@@ -1133,11 +1133,13 @@ async function seguro(fn, okMsg) {
 }
 
 /* ===================== tickets ===================== */
+// Productos de la venta en orden alfabético, para el ticket y la nota.
+const itemsAlfa = v => (v.items || []).slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es", { sensitivity: "base" }));
 function ticketHTML(v) {
   const n = negocio();
   return `<div class="receipt">${n.nombre ? `<div class="c"><b>${esc(n.nombre)}</b></div>` : ""}${n.doc ? `<div class="c">RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div class="c">${esc(n.dir)}</div>` : ""}${n.tel ? `<div class="c">Tel. ${esc(n.tel)}</div>` : ""}<hr>
     <div class="r"><span>Ticket ${v.folio ? "#" + v.folio : ""}</span><span>${fechaCorta(v.fecha)} ${esc(v.hora)}</span></div><div>Cliente: ${esc(nombreCli(v))}</div>${(() => { const c = S.data.clientes[v.cli]; if (!c) return ""; const dir = [c.dir, c.comuna].filter(Boolean).join(", "); return (c.doc ? `<div>RUT: ${esc(c.doc)}</div>` : "") + (dir ? `<div>Dirección: ${esc(dir)}</div>` : ""); })()}<hr>
-    ${(v.items || []).map(i => `<div>${esc(i.nombre)}</div><div class="r"><span>  ${nf.format(i.cant)} × ${money(i.precio)}</span><span>${money(i.cant * i.precio)}</span></div>`).join("")}<hr>
+    ${itemsAlfa(v).map(i => `<div>${esc(i.nombre)}</div><div class="r"><span>  ${nf.format(i.cant)} × ${money(i.precio)}</span><span>${money(i.cant * i.precio)}</span></div>`).join("")}<hr>
     <div class="r"><span>Subtotal</span><span>${money(v.sub)}</span></div>${v.desc ? `<div class="r"><span>Descuento</span><span>−${money(v.desc)}</span></div>` : ""}
     <div class="r tot"><span>TOTAL</span><span>${money(v.total)}</span></div><div class="r"><span>Pago</span><span>${PAGOS[v.pago] || v.pago}</span></div>
     ${v.pago === "efectivo" && v.recibido ? `<div class="r"><span>Recibido</span><span>${money(v.recibido)}</span></div><div class="r"><span>Vuelto</span><span>${money(v.recibido - v.total)}</span></div>` : ""}
@@ -1152,14 +1154,14 @@ function notaHTML(v) {
   const n = negocio(), c = S.data.clientes[v.cli];
   const folio = v.folio ? String(v.folio).padStart(6, "0") : "—";
   const filaCli = (k, val) => val ? `<tr><th>${k}</th><td>${esc(val)}</td></tr>` : "";
-  const items = (v.items || []).map(i => { const p = S.data.productos[i.pid]; return `<tr><td class="n">${nf.format(i.cant)}</td><td>${esc(p?.codigo || "")}</td><td>${esc(i.nombre)}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.cant * i.precio)}</td></tr>`; }).join("");
+  const items = itemsAlfa(v).map((i, k) => `<tr><td class="nro">${k + 1}</td><td>${esc(i.nombre)}</td><td class="n">${nf.format(i.cant)}</td><td class="n">${money(i.precio)}</td><td class="n">${money(i.cant * i.precio)}</td></tr>`).join("");
   const css = `*{box-sizing:border-box}body{font-family:"Geist",Arial,Helvetica,sans-serif;font-size:12px;color:#111;margin:0}@page{size:A4;margin:0}@media print{body{padding:14mm 16mm}}
     .top{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:12px}
     .neg b{font-size:20px;display:block;margin-bottom:4px}.neg div{color:#333}
     .doc{border:2px solid #111;border-radius:6px;padding:10px 16px;text-align:center;min-width:190px}.doc b{display:block;font-size:13px;letter-spacing:.06em}.doc .num{font-size:20px;font-weight:700;margin:4px 0}
     h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:18px 0 6px;color:#444}
     table{width:100%;border-collapse:collapse}.cli th{text-align:left;width:110px;color:#555;font-weight:600;padding:2px 0}.cli td{padding:2px 0}
-    .it th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #111;padding:6px 6px}.it td{padding:6px;border-bottom:1px solid #ddd}.n,.it th.n{text-align:right;white-space:nowrap}
+    .it th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1.5px solid #111;padding:6px 6px}.it td{padding:6px;border-bottom:1px solid #ddd}.n,.it th.n{text-align:right;white-space:nowrap}.it .nro{width:34px;color:#555}
     @media screen{body{max-width:210mm;margin:0 auto;padding:16mm}}
     .tot{margin-top:12px;margin-left:auto;width:280px}.tot td{padding:4px 6px}.tot .g td{font-size:16px;font-weight:700;border-top:2px solid #111}
     .pie{margin-top:28px;border-top:1px solid #ccc;padding-top:8px;color:#555;font-size:12px;text-align:center}
@@ -1168,7 +1170,7 @@ function notaHTML(v) {
     <div class="top"><div class="neg">${n.nombre ? `<b>${esc(n.nombre)}</b>` : ""}${n.doc ? `<div>RUT ${esc(n.doc)}</div>` : ""}${n.dir ? `<div>${esc(n.dir)}</div>` : ""}${n.tel ? `<div>Tel. ${esc(n.tel)}</div>` : ""}</div>
       <div class="doc"><b>FECHA</b><div class="num">${fechaCorta(v.fecha)}</div></div></div>
     <h2>Cliente</h2><table class="cli">${filaCli("Nombre", nombreCli(v))}${c ? filaCli("RUT", c.doc) + filaCli("Dirección", [c.dir, c.comuna].filter(Boolean).join(", ")) + filaCli("Teléfono", c.tel) + filaCli("Email", c.email) : ""}</table>
-    <h2>Detalle</h2><table class="it"><thead><tr><th class="n">Cant.</th><th>Código</th><th>Descripción</th><th class="n">Precio unit.</th><th class="n">Total</th></tr></thead><tbody>${items}</tbody></table>
+    <h2>Detalle</h2><table class="it"><thead><tr><th class="nro">N°</th><th>Producto</th><th class="n">Cant.</th><th class="n">Precio unit.</th><th class="n">Total</th></tr></thead><tbody>${items}</tbody></table>
     <table class="tot"><tr><td>Subtotal</td><td class="n">${money(v.sub)}</td></tr>${v.desc ? `<tr><td>Descuento</td><td class="n">−${money(v.desc)}</td></tr>` : ""}<tr class="g"><td>TOTAL</td><td class="n">${money(v.total)}</td></tr>
       <tr><td>Forma de pago</td><td class="n">${PAGOS[v.pago] || esc(v.pago)}</td></tr>${v.pago === "efectivo" && v.recibido ? `<tr><td>Recibido</td><td class="n">${money(v.recibido)}</td></tr><tr><td>Vuelto</td><td class="n">${money(v.recibido - v.total)}</td></tr>` : ""}</table>
     ${v.nota ? `<h2>Nota</h2><div>${esc(v.nota)}</div>` : ""}${v.estado === "anulada" ? `<div class="anul">VENTA ANULADA</div>` : ""}
@@ -1203,7 +1205,7 @@ async function pedirAdmin(motivo, fn) {
   try { definido = (await api("POST", "/api/pin", { accion: "estado" })).definido; } catch (e) { return toast("No se pudo verificar el código.", true); }
   adminPendiente = fn;
   if (!definido) {
-    abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá cambiar precios.</p>
+    abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá cambiar precios, eliminar productos o confirmar pagos.</p>
       <form data-form="adminCrear" class="fgrid"><div class="fld"><label for="admNuevo">Código nuevo</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">De 4 a 8 números</span></div>
       <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">&nbsp;</span></div>
       <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Crear código</button></div></form>`);
@@ -1416,7 +1418,7 @@ const ACT = {
   },
   delProd: id => {
     const p = S.data.productos[id];
-    confirmar("Eliminar producto", `¿Eliminar <b>${esc(p.nombre)}</b>? Las ventas pasadas se conservan en los reportes.`, "Eliminar", () => seguro(() => borrar("productos", id), "Producto eliminado"));
+    pedirAdmin("eliminar un producto", () => confirmar("Eliminar producto", `¿Eliminar <b>${esc(p.nombre)}</b>? Las ventas pasadas se conservan en los reportes.`, "Eliminar", () => seguro(() => borrar("productos", id), "Producto eliminado")));
   },
   ajuste: id => {
     const p = S.data.productos[id];
