@@ -1795,7 +1795,10 @@ function demoData() {
   let seed = 11; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   d.config.negocio = { nombre: "Almacén Demo", moneda: "$", pie: "¡Gracias por su compra!" };
   const prods = [["Café molido 500 g", "Almacén", 2800, 4500], ["Yerba mate 1 kg", "Almacén", 1900, 3100], ["Galletitas surtidas", "Almacén", 650, 1200], ["Aceite girasol 1,5 L", "Almacén", 2100, 3300], ["Leche entera 1 L", "Lácteos", 720, 1100], ["Queso cremoso kg", "Lácteos", 5200, 7900], ["Yogur bebible", "Lácteos", 600, 1050], ["Gaseosa cola 2,25 L", "Bebidas", 1500, 2600], ["Agua mineral 2 L", "Bebidas", 500, 950], ["Cerveza lata 473 ml", "Bebidas", 900, 1600], ["Detergente 750 ml", "Limpieza", 1100, 1900], ["Lavandina 2 L", "Limpieza", 700, 1250], ["Pan francés kg", "Panadería", 1200, 2200], ["Medialunas x6", "Panadería", 1400, 2800]];
-  prods.forEach(([n, c, co, pr], i) => d.productos["dp" + i] = { nombre: n, cat: c, codigo: "779" + (100200 + i * 37), costo: co, precio: pr, stock: [40, 6, 55, 18, 3, 9, 24, 30, 0, 48, 14, 20, 12, 8][i], min: 8 });
+  // más productos de limpieza para que el gráfico de % por producto muestre la barra "Otros"
+  prods.push(["Esponja doble faz", "Limpieza", 180, 350], ["Esponja de acero", "Limpieza", 220, 420], ["Paño multiuso x3", "Limpieza", 600, 1100], ["Escobillón", "Limpieza", 1800, 3200], ["Guantes de goma", "Limpieza", 700, 1300],
+    ["Bolsas de basura x10", "Limpieza", 450, 850], ["Limpiavidrios 500 ml", "Limpieza", 900, 1650], ["Cloro gel 900 ml", "Limpieza", 850, 1500], ["Trapero", "Limpieza", 1200, 2200], ["Desinfectante 1 L", "Limpieza", 1300, 2400]);
+  prods.forEach(([n, c, co, pr], i) => d.productos["dp" + i] = { nombre: n, cat: c, codigo: "779" + (100200 + i * 37), costo: co, precio: pr, stock: [40, 6, 55, 18, 3, 9, 24, 30, 0, 48, 14, 20, 12, 8][i] ?? 15 + (i * 7) % 30, min: 8 });
   const calles = [["Los Aromos 123", "Ñuñoa"], ["Av. Pajaritos 2450", "Maipú"], ["San Diego 980", "Santiago"], ["Av. Perú 615", "Viña del Mar"], ["Pasaje Las Rosas 44", "La Florida"], ["Gran Avenida 5120", "San Miguel"]];
   ["Ana Torres", "Carlos Méndez", "Kiosco La Esquina", "Bar El Puerto", "Lucía Fernández", "Jorge Ruiz"].forEach((n, i) => {
     const cuerpo = String(i === 2 || i === 3 ? 76100000 + i * 23457 : 12000000 + i * 1234567);
