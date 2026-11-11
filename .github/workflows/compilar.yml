@@ -1,7 +1,7 @@
 name: Compilar Vendímetro
 
-# Solo compila al pedirlo (gh workflow run) para no gastar los minutos gratis del repositorio privado en cada cambio.
 on:
+  push:
   workflow_dispatch:
 
 jobs:
