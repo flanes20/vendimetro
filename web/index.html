@@ -203,10 +203,18 @@ td.prodname { min-width: 170px; }
 .otros-det > b { color: var(--ink); }
 .otros-det span b { color: var(--ink); font-weight: 600; }
 .otros-det i { font-style: normal; }
-.otros-mas { flex-basis: 100%; }
-.otros-mas summary { cursor: pointer; color: var(--accent); font-weight: 600; width: max-content; }
-.otros-mas[open] summary { margin-bottom: 6px; }
-.otros-mas > div { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.pctbars { gap: 6px; }
+.pcol { min-width: 50px; overflow: hidden; }
+.pcol .pm { font-size: 10.5px; }
+.pcol .pn { font-size: 11.5px; }
+.pcol .pv { font-size: 15px; }
+.pcol .pbar span { font-size: 10.5px; }
+.pcol-otros { cursor: pointer; border-radius: 6px; }
+.pcol-otros:hover .pbar, .pcol-otros:focus-visible .pbar { background: var(--accent); }
+.pcol-otros:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pcol .pver { font-size: 11px; font-weight: 600; color: var(--accent); text-align: center; }
+.otros-hint { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
+.otros-hint b { color: var(--ink); }
 .hbars { display: flex; flex-direction: column; gap: 12px; }
 .hb-t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
 .hb-n { font-weight: 600; min-width: 0; }
@@ -542,16 +550,24 @@ function pctProductos(vs) {
   const prods = porProducto(vs), total = prods.reduce((a, p) => a + p.total, 0);
   CSV.pctProd = [["Producto", "Unidades", "Vendido", "% del total"], ...prods.map(p => [p.nombre, p.cant, Math.round(p.total), total ? Math.round(p.total / total * 1000) / 10 : 0])];
   if (!total) return `<p class="empty">Sin ventas en este período</p>`;
-  const MAX = 10, cols = prods.slice(0, MAX).map(p => ({ n: p.nombre, t: p.total, u: p.cant }));
+  // 15 barras; la última, "Otros", junta el resto y al pincharla muestra esos productos
+  const MAX = 15, cols = prods.slice(0, MAX).map(p => ({ n: p.nombre, t: p.total, u: p.cant }));
   const resto = prods.slice(MAX);
+  OTROS = { resto, total };
   if (resto.length) cols.push({ n: `Otros (${resto.length} productos)`, t: resto.reduce((a, p) => a + p.total, 0), otros: true });
   const mx = Math.max(...cols.map(c => c.t)), ALTO = 230;
   return `<div class="pct-tot">Total ventas <b>${money(total)}</b> <span class="muted">= 100%</span></div>
-    <div class="pctbars">${cols.map(c => { const h = Math.max(4, Math.round(c.t / mx * ALTO)), dentro = h >= 34; return `<div class="pcol" title="${esc(c.n)}: ${money(c.t)} (${pct(c.t / total * 100)})${c.u ? ` · ${nf.format(c.u)} unidades` : ""}">
-      <span class="pn">${esc(c.n)}</span><span class="pv">${pct(c.t / total * 100)}</span>${dentro ? "" : `<span class="pm">${money(c.t)}</span>`}
+    <div class="pctbars">${cols.map(c => { const h = Math.max(4, Math.round(c.t / mx * ALTO)), dentro = h >= 34; return `<div class="pcol${c.otros ? " pcol-otros" : ""}"${c.otros ? ` data-act="verOtros" role="button" tabindex="0"` : ""} title="${c.otros ? "Pincha para ver estos productos" : `${esc(c.n)}: ${money(c.t)} (${pct(c.t / total * 100)})${c.u ? ` · ${nf.format(c.u)} unidades` : ""}`}">
+      <span class="pn">${esc(c.n)}</span><span class="pv">${pct(c.t / total * 100)}</span>${c.otros ? `<span class="pver">Ver cuáles ▸</span>` : ""}${dentro ? "" : `<span class="pm">${money(c.t)}</span>`}
       <div class="pbar${c.otros ? " otros" : ""}" style="height:${h}px">${dentro ? `<span>${money(c.t)}</span>` : ""}</div></div>`; }).join("")}</div>
-    ${resto.length ? (() => { const VIS = 8, it = p => `<span>${esc(p.nombre)} <b>${money(p.total)}</b> <i>${pct(p.total / total * 100)}</i></span>`, mas = resto.slice(VIS);
-      return `<div class="otros-det"><b>Otros (${resto.length} productos):</b> ${resto.slice(0, VIS).map(it).join("")}${mas.length ? `<details class="otros-mas"><summary>Ver los ${mas.length} restantes</summary><div>${mas.map(it).join("")}</div></details>` : ""}</div>`; })() : ""}`;
+    ${resto.length ? `<p class="otros-hint">Pincha la barra <b>Otros</b> o <a href="#" data-act="verOtros">aquí</a> para ver los ${resto.length} productos que incluye.</p>` : ""}`;
+}
+let OTROS = null;
+function verOtros() {
+  if (!OTROS?.resto.length) return;
+  const { resto, total } = OTROS, suma = resto.reduce((a, p) => a + p.total, 0);
+  abrir(`Otros · ${resto.length} productos`, `<p class="muted" style="margin:0 0 14px">Suman ${money(suma)}, el ${pct(suma / total * 100)} del total vendido (${money(total)}). El % de cada uno es sobre el total.</p>
+    ${hbars(resto.map(p => ({ nombre: p.nombre, v: p.total, sub: `${nf.format(p.cant)} unidades` })), { total, max: Infinity })}`);
 }
 // barras horizontales: nombre, barra, monto y % (rows: [{nombre, v, sub?}])
 function hbars(rows, { total, vacio = "Sin ventas en este período", max = 8, otros = "otros" } = {}) {
@@ -1425,6 +1441,7 @@ const ACT = {
     }
   },
   verVenta: id => { const v = buscarVenta(id); if (v) verVenta(v); },
+  verOtros: () => verOtros(),
   dlTicket: id => { const v = buscarVenta(id); if (v) descargar(`ticket-${v.folio || v.id}.html`, ticketDoc(v)); },
   printTicket: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "ticket"); },
   printA4: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "a4"); },
