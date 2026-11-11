@@ -1268,7 +1268,7 @@ async function pedirAdmin(motivo, fn) {
   try { definido = (await api("POST", "/api/pin", { accion: "estado" })).definido; } catch (e) { return toast("No se pudo verificar el código.", true); }
   adminPendiente = fn;
   if (!definido) {
-    abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá cambiar precios, eliminar productos o confirmar pagos.</p>
+    abrir("Crear código de administrador", `<p>Para ${esc(motivo)} se necesita un código de administrador. Todavía no hay uno: créalo ahora. Guárdalo bien; solo quien lo sepa podrá editar o borrar datos, cambiar precios y confirmar pagos.</p>
       <form data-form="adminCrear" class="fgrid"><div class="fld"><label for="admNuevo">Código nuevo</label><input id="admNuevo" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">De 4 a 8 números</span></div>
       <div class="fld"><label for="admRepetir">Repite el código</label><input id="admRepetir" type="password" inputmode="numeric" autocomplete="new-password" maxlength="8" required><span class="hint">&nbsp;</span></div>
       <div class="dlg-f" style="grid-column:1/-1"><button type="button" class="btn" data-act="cerrar">Cancelar</button><button class="btn pri" type="submit">Crear código</button></div></form>`);
@@ -1699,6 +1699,24 @@ const FORM = {
     await seguro(() => guardar("config", "negocio", d), "Datos del negocio guardados");
   },
 };
+
+// Editar o borrar datos ya guardados solo lo puede hacer el administrador con su código.
+// Crear cosas nuevas (venta, producto, cliente, compra, gasto) no lo pide.
+const conAdmin = (motivo, fn) => (...a) => { const m = typeof motivo === "function" ? motivo(...a) : motivo; return m ? pedirAdmin(m, () => fn(...a)) : fn(...a); };
+Object.assign(ACT, {
+  anular: conAdmin("anular una venta", ACT.anular),
+  editProd: conAdmin(id => id && "editar un producto", ACT.editProd),
+  ajuste: conAdmin("cambiar el stock", ACT.ajuste),
+  delCompra: conAdmin("anular una compra", ACT.delCompra),
+  editProv: conAdmin(id => id && "editar un proveedor", ACT.editProv),
+  delProv: conAdmin("eliminar un proveedor", ACT.delProv),
+  editCli: conAdmin(id => id && "editar un cliente", ACT.editCli),
+  delCli: conAdmin("eliminar un cliente", ACT.delCli),
+  delGasto: conAdmin("borrar un gasto", ACT.delGasto),
+  importar: conAdmin("importar datos desde Excel", ACT.importar),
+  restaurar: conAdmin("restaurar un respaldo", ACT.restaurar),
+});
+FORM.negocio = conAdmin("cambiar los datos del negocio", FORM.negocio);
 
 document.addEventListener("click", e => {
   const el = e.target.closest("[data-act]"); if (!el) return;

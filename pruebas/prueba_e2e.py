@@ -43,7 +43,7 @@ def pasos(w):
     ok("muestra la versión instalada", js(w, "S.info.version") == app.VERSION)
 
     # ajustes del negocio
-    js(w, "ACT.go('ajustes'); $('#nNombre').value='Almacén Don Pepe'; $('#nMoneda').value='$'; FORM.negocio();"); esperar(w)
+    js(w, "S.adminHasta=Date.now()+600000; ACT.go('ajustes'); $('#nNombre').value='Almacén Don Pepe'; $('#nMoneda').value='$'; FORM.negocio();"); esperar(w)
     # producto nuevo con stock inicial 20
     js(w, "ACT.editProd(''); $('#fpNombre').value='Café 500 g'; $('#fpCodigo').value='7790001'; $('#fpCat').value='Almacén'; $('#fpCosto').value='100'; $('#fpPrecio').value='180'; $('#fpStock').value='20'; $('#fpMin').value='5'; FORM.prod(null,'');"); esperar(w)
     pid = js(w, "Object.keys(S.data.productos)[0]")
@@ -72,14 +72,15 @@ def pasos(w):
     # compra de 10 a costo 90
     js(w, f"ACT.go('compras'); S.compra.items=[{{pid:'{pid}',cant:10,costo:90}}]; ACT.go('compras'); ACT.cmpGuardar();"); esperar(w, 2)
     # merma de 1
-    js(w, f"ACT.ajuste('{pid}'); $('#ajTipo').value='merma'; $('#ajCant').value='1'; $('#ajNota').value='vencido'; FORM.ajuste(null,'{pid}');"); esperar(w)
+    js(w, f"S.adminHasta=Date.now()+600000; ACT.ajuste('{pid}'); $('#ajTipo').value='merma'; $('#ajCant').value='1'; $('#ajNota').value='vencido'; FORM.ajuste(null,'{pid}');"); esperar(w)
     # gasto
     js(w, "ACT.go('gastos'); $('#gMonto').value='500'; $('#gDesc').value='Luz'; FORM.gasto();"); esperar(w)
     # pago parcial de María
     js(w, f"ACT.abono('{cid}'); $('#abMonto').value='100'; FORM.abono(null,'{cid}');"); esperar(w)
     # anular la venta 1
     key = js(w, "(()=>{const v=M().ventas.find(v=>v.folio===1);return v.fecha+'|'+v.id})()")
-    js(w, f"ACT.anular('{key}'); ACT.confirmOk();"); esperar(w, 2)
+    js(w, f"S.adminHasta=Date.now()+600000; ACT.anular('{key}'); ACT.confirmOk();"); esperar(w, 2)
+    js(w, "S.adminHasta=0")  # hasta aquí se usó como administrador; el código se crea más abajo
 
     # venta a medias: se guarda sola, pregunta antes de cerrar y se recupera al reabrir
     js(w, f"ACT.go('pos'); ACT.posAdd('{pid}'); ACT.posAdd('{pid}'); S.pos.cli='{cid}';"); esperar(w)
@@ -162,6 +163,22 @@ def pasos(w):
     ok("administrador marca la venta como pagada", js(w, "M().ventas.find(v=>v.folio===2).pagada") is True and js(w, "estadoTxt(M().ventas.find(v=>v.folio===2))") == "Pagada")
     js(w, f"ACT.fijarPago('{v2id}|no')"); esperar(w)
     ok("y como no pagada", js(w, "M().ventas.find(v=>v.folio===2).pagada") is False)
+    js(w, "S.adminHasta=0; ACT.cerrar();")
+
+    # editar o borrar datos guardados pide el código; crear cosas nuevas no
+    titulo = lambda: js(w, "$('#dlgT').textContent") or ""
+    for accion, arg in [("anular", v2id), ("editProd", pid), ("ajuste", pid), ("delCompra", "x|y"), ("editProv", "x"), ("delProv", "x"), ("editCli", cid), ("delCli", cid), ("delGasto", "x|y"), ("importar", "productos"), ("restaurar", "")]:
+        js(w, f"S.adminHasta=0; ACT.cerrar(); ACT.{accion}('{arg}')"); esperar(w)
+        ok(f"sin código no deja: {accion}", titulo().startswith("Código de administrador"), titulo())
+    js(w, "S.adminHasta=0; ACT.cerrar(); ACT.go('ajustes');"); esperar(w, 0.5); js(w, "FORM.negocio()"); esperar(w)
+    ok("sin código no deja: datos del negocio", titulo().startswith("Código de administrador"), titulo())
+    js(w, "S.adminHasta=0; ACT.cerrar(); ACT.editCli('')"); esperar(w)
+    ok("crear un cliente nuevo no pide código", titulo() == "Nuevo cliente", titulo())
+    js(w, "ACT.cerrar(); ACT.editProd('')"); esperar(w)
+    ok("crear un producto nuevo no pide código", titulo() == "Nuevo producto", titulo())
+    js(w, f"ACT.cerrar(); ACT.editCli('{cid}')"); esperar(w)
+    js(w, "$('#admPin').value='4321'; FORM.adminPin();"); esperar(w, 2)
+    ok("con el código se puede editar el cliente", titulo() == "Editar cliente", titulo())
     js(w, "S.adminHasta=0; ACT.cerrar();")
 
     # crear un cliente desde el punto de venta: queda guardado y elegido en la venta

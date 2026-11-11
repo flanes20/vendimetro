@@ -35,7 +35,7 @@ def ok(n, c, x=""): res.append(("OK " if c else "FALLA ") + n + (f"  ({x})" if x
 def correr(w):
     time.sleep(4)
     w.evaluate_js("window.__err=[];addEventListener('error',e=>__err.push(e.message));addEventListener('unhandledrejection',e=>__err.push(String(e.reason)))")
-    w.evaluate_js("ACT.go('productos'); ACT.importar('productos')"); time.sleep(2)
+    w.evaluate_js("S.adminHasta=Date.now()+600000; ACT.go('productos'); ACT.importar('productos')"); time.sleep(2)
     ok("resumen de importación", "Importar productos" in (w.evaluate_js("$('#dlgT').textContent") or ""))
     plan = w.evaluate_js("JSON.stringify({n:importPendiente.plan.nuevos.length,c:importPendiente.plan.cambios.length,e:importPendiente.plan.errores})")
     ok("detecta 2 nuevos y 2 filas con problema", plan == '{"n":2,"c":0,"e":["Fila 5: «abc» no es un número válido en costo","Fila 6: falta el nombre"]}', plan)
@@ -45,7 +45,7 @@ def correr(w):
     # reimportar con stock distinto: debe actualizar, no duplicar
     wb2 = Workbook(); ws2 = wb2.active; ws2.append(["Nombre", "Codigo", "Stock"]); ws2.append(["Yerba 1 kg", "7791234", 7]); wb2.save(TMP / "conteo.xlsx")
     rutas["OPEN"] = str(TMP / "conteo.xlsx")
-    w.evaluate_js("ACT.importar('productos')"); time.sleep(2); w.evaluate_js("ACT.importarOk()"); time.sleep(2)
+    w.evaluate_js("S.adminHasta=Date.now()+600000; ACT.importar('productos')"); time.sleep(2); w.evaluate_js("ACT.importarOk()"); time.sleep(2)
     ok("reimportar actualiza sin duplicar", w.evaluate_js("Object.keys(S.data.productos).length") == 2)
     ok("stock actualizado a 7 con movimiento registrado", w.evaluate_js("Object.values(S.data.productos).find(p=>p.nombre==='Yerba 1 kg').stock") == 7 and w.evaluate_js("M().ajustes.some(a=>a.tipo==='conteo'&&a.delta===-5)"))
     # clientes desde Excel: RUT sin formato se ordena, RUT inválido se rechaza, la dirección se guarda
@@ -55,7 +55,7 @@ def correr(w):
     ws3.append(["RUT malo", "12.345.678-0", "", "", ""])
     ws3.append(["Ferretería El Clavo SpA", "76.123.456-0", "", "Av. Matta 456", "Santiago"])
     wb3.save(TMP / "clientes.xlsx"); rutas["OPEN"] = str(TMP / "clientes.xlsx")
-    w.evaluate_js("ACT.go('clientes'); ACT.importar('clientes')"); time.sleep(2)
+    w.evaluate_js("S.adminHasta=Date.now()+600000; ACT.go('clientes'); ACT.importar('clientes')"); time.sleep(2)
     plan_c = w.evaluate_js("JSON.stringify({n:importPendiente.plan.nuevos.length,e:importPendiente.plan.errores})")
     ok("clientes: 2 nuevos y rechaza el RUT inválido", '"n":2' in plan_c and "Fila 3 (RUT malo)" in plan_c and "debería ser 5" in plan_c, plan_c)
     w.evaluate_js("ACT.importarOk()"); time.sleep(2)
