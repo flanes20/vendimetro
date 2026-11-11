@@ -203,6 +203,10 @@ td.prodname { min-width: 170px; }
 .otros-det > b { color: var(--ink); }
 .otros-det span b { color: var(--ink); font-weight: 600; }
 .otros-det i { font-style: normal; }
+.otros-mas { flex-basis: 100%; }
+.otros-mas summary { cursor: pointer; color: var(--accent); font-weight: 600; width: max-content; }
+.otros-mas[open] summary { margin-bottom: 6px; }
+.otros-mas > div { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .hbars { display: flex; flex-direction: column; gap: 12px; }
 .hb-t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
 .hb-n { font-weight: 600; min-width: 0; }
@@ -546,7 +550,8 @@ function pctProductos(vs) {
     <div class="pctbars">${cols.map(c => { const h = Math.max(4, Math.round(c.t / mx * ALTO)), dentro = h >= 34; return `<div class="pcol" title="${esc(c.n)}: ${money(c.t)} (${pct(c.t / total * 100)})${c.u ? ` · ${nf.format(c.u)} unidades` : ""}">
       <span class="pn">${esc(c.n)}</span><span class="pv">${pct(c.t / total * 100)}</span>${dentro ? "" : `<span class="pm">${money(c.t)}</span>`}
       <div class="pbar${c.otros ? " otros" : ""}" style="height:${h}px">${dentro ? `<span>${money(c.t)}</span>` : ""}</div></div>`; }).join("")}</div>
-    ${resto.length ? `<div class="otros-det"><b>Otros (${resto.length} productos):</b> ${resto.map(p => `<span>${esc(p.nombre)} <b>${money(p.total)}</b> <i>${pct(p.total / total * 100)}</i></span>`).join("")}</div>` : ""}`;
+    ${resto.length ? (() => { const VIS = 8, it = p => `<span>${esc(p.nombre)} <b>${money(p.total)}</b> <i>${pct(p.total / total * 100)}</i></span>`, mas = resto.slice(VIS);
+      return `<div class="otros-det"><b>Otros (${resto.length} productos):</b> ${resto.slice(0, VIS).map(it).join("")}${mas.length ? `<details class="otros-mas"><summary>Ver los ${mas.length} restantes</summary><div>${mas.map(it).join("")}</div></details>` : ""}</div>`; })() : ""}`;
 }
 // barras horizontales: nombre, barra, monto y % (rows: [{nombre, v, sub?}])
 function hbars(rows, { total, vacio = "Sin ventas en este período", max = 8, otros = "otros" } = {}) {
