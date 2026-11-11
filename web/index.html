@@ -183,6 +183,7 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--line); border-bottom: 0
 .bar-in { display: flex; align-items: center; gap: 8px; }
 .bar-in i { display: block; height: 6px; border-radius: 3px; background: var(--accent); min-width: 2px; }
 .prodname b { display: block; font-weight: 600; }
+td.prodname { min-width: 170px; }
 .prodname span { font-size: 12px; color: var(--muted); }
 
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; border-radius: 99px; padding: 2px 9px; white-space: nowrap; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
@@ -198,6 +199,20 @@ tfoot td { font-weight: 700; border-top: 1px solid var(--line); border-bottom: 0
 .pcol .pm { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .pcol .pbar { width: 100%; max-width: 76px; background: var(--accent); border-radius: 4px 4px 0 0; display: flex; justify-content: center; padding-top: 8px; margin-top: 3px; }
 .pcol .pbar span { color: var(--accent-ink); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.otros-det { margin-top: 12px; font-size: 12.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
+.otros-det > b { color: var(--ink); }
+.otros-det span b { color: var(--ink); font-weight: 600; }
+.otros-det i { font-style: normal; }
+.hbars { display: flex; flex-direction: column; gap: 12px; }
+.hb-t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
+.hb-n { font-weight: 600; min-width: 0; }
+.hb-n small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.hb-v { white-space: nowrap; }
+.hb-v i { font-style: normal; color: var(--muted); margin-left: 8px; display: inline-block; min-width: 44px; text-align: right; }
+.hb-bar { height: 8px; border-radius: 4px; background: var(--line-2); overflow: hidden; }
+.hb-bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.hb-bar i.gris, .pcol .pbar.otros { background: var(--muted); }
+.mg-sub { display: block; font-size: 11.5px; color: var(--muted); }
 .pcol .pbar.otros { background: var(--muted); }
 .pcol:hover .pbar { filter: brightness(1.12); }
 .cbox { position: relative; }
@@ -530,7 +545,17 @@ function pctProductos(vs) {
   return `<div class="pct-tot">Total ventas <b>${money(total)}</b> <span class="muted">= 100%</span></div>
     <div class="pctbars">${cols.map(c => { const h = Math.max(4, Math.round(c.t / mx * ALTO)), dentro = h >= 34; return `<div class="pcol" title="${esc(c.n)}: ${money(c.t)} (${pct(c.t / total * 100)})${c.u ? ` · ${nf.format(c.u)} unidades` : ""}">
       <span class="pn">${esc(c.n)}</span><span class="pv">${pct(c.t / total * 100)}</span>${dentro ? "" : `<span class="pm">${money(c.t)}</span>`}
-      <div class="pbar${c.otros ? " otros" : ""}" style="height:${h}px">${dentro ? `<span>${money(c.t)}</span>` : ""}</div></div>`; }).join("")}</div>`;
+      <div class="pbar${c.otros ? " otros" : ""}" style="height:${h}px">${dentro ? `<span>${money(c.t)}</span>` : ""}</div></div>`; }).join("")}</div>
+    ${resto.length ? `<div class="otros-det"><b>Otros (${resto.length} productos):</b> ${resto.map(p => `<span>${esc(p.nombre)} <b>${money(p.total)}</b> <i>${pct(p.total / total * 100)}</i></span>`).join("")}</div>` : ""}`;
+}
+// barras horizontales: nombre, barra, monto y % (rows: [{nombre, v, sub?}])
+function hbars(rows, { total, vacio = "Sin ventas en este período", max = 8, otros = "otros" } = {}) {
+  rows = rows.filter(r => r.v);
+  if (!rows.length) return `<p class="empty">${vacio}</p>`;
+  const T = total ?? rows.reduce((a, r) => a + r.v, 0), vis = rows.slice(0, max), resto = rows.slice(max);
+  if (resto.length) vis.push({ nombre: `${resto.length} ${otros} más`, v: resto.reduce((a, r) => a + r.v, 0), sub: resto.map(r => r.nombre).join(", "), gris: true });
+  const mx = Math.max(...vis.map(r => r.v));
+  return `<div class="hbars">${vis.map(r => `<div class="hb"><div class="hb-t"><span class="hb-n">${esc(r.nombre)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</span><span class="hb-v"><b>${money(r.v)}</b>${T ? `<i>${pct(r.v / T * 100)}</i>` : ""}</span></div><div class="hb-bar"><i class="${r.gris ? "gris" : ""}" style="width:${Math.max(1, r.v / mx * 100)}%"></i></div></div>`).join("")}</div>`;
 }
 function agrupar(list, keyFn, nameFn) {
   const m = {};
@@ -886,9 +911,26 @@ function pgVentas() {
   CSV.ventas = [["Folio", "Fecha", "Hora", "Cliente", "Productos", "Subtotal", "Descuento", "Total", "Costo", "Ganancia", "Pago", "Estado"], ...list.map(v => [v.folio, v.fecha, v.hora, nombreCli(v), (v.items || []).map(i => `${i.cant} x ${i.nombre}`).join(", "), v.sub, v.desc, v.total, v.costo, v.total - v.costo, PAGOS[v.pago] || v.pago, estadoTxt(v)])];
   return `<div class="kpis">${kpi("Ventas", money(ok.total), delta(ok.total, prev.total, etiquetaPrev()), "feat")}${kpi("Ganancia bruta", money(ok.ganancia), `margen ${pct(ok.total ? ok.ganancia / ok.total * 100 : NaN)}`)}${kpi("Nº de ventas", nf0.format(ok.n), `${list.length - ok.n} anuladas`)}${kpi("Ticket promedio", money(ok.ticket))}${kpi("Descuentos dados", money(ok.desc))}</div>
   ${card("% de ventas por producto · " + etiqueta(), pctProductos(list.filter(okV)), { sub: "Qué parte del total vendido es cada producto", acts: csvBtn("pctProd") })}
+  ${graficosVentas(list.filter(okV), ok)}
   ${card("Detalle de ventas", `<div class="row" style="padding:14px 18px 0"><input id="ventaQ" type="search" placeholder="Buscar folio, cliente o producto" value="${esc(S.ventaQ)}" style="max-width:320px"><select id="ventaPago" style="max-width:230px"><option value="">Todas las formas de pago</option>${Object.entries(PAGOS).map(([k, l]) => `<option value="${k}"${S.ventaPago === k ? " selected" : ""}>${l}</option>`).join("")}</select><select id="ventaEstado" style="max-width:180px">${[["*", "Todos los estados"], ["", "Por confirmar"], ["si", "Pagadas"], ["no", "No pagadas"], ["anulada", "Anuladas"]].map(([k, l]) => `<option value="${k}"${(S.ventaEstado ?? "*") === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
     ${table(["Folio", "Fecha", "Cliente", "Productos", "Pago", "#Total", "#Ganancia", "Estado", ""], list.map(v => `<tr class="${v.estado === "anulada" ? "anul" : ""}"><td class="mono">${v.folio ? "#" + v.folio : "—"}</td><td class="nw">${fechaCorta(v.fecha)} <span class="muted">${esc(v.hora)}</span></td><td>${esc(nombreCli(v))}</td><td>${(v.items || []).map(i => `${nf.format(i.cant)} × ${esc(i.nombre)}`).join(", ")}</td><td><span class="chip">${PAGOS[v.pago] || esc(v.pago)}</span></td><td class="n">${money(v.total)}</td><td class="n">${money(v.total - v.costo)}</td><td class="keep">${v.estado === "anulada" ? `<span class="chip out">Anulada</span>` : (([t, c]) => `<button class="chip ${c}" data-act="estadoPago" data-id="${v.fecha}|${v.id}" title="Cambiar estado de pago (administrador)">${t} ✎</button>`)(ESTADOS_PAGO[estadoPago(v)])}</td><td><div class="t-acts"><button class="btn sm" data-act="verVenta" data-id="${v.fecha}|${v.id}">Ver</button><button class="btn sm" data-act="printVenta" data-id="${v.fecha}|${v.id}" title="Imprimir">${ico("print")}</button>${v.estado !== "anulada" ? `<button class="btn sm dan" data-act="anular" data-id="${v.fecha}|${v.id}">Anular</button>` : ""}</div></td></tr>`), "No hay ventas en este período", `<tr><td colspan="5">${ok.n} ventas válidas</td><td class="n">${money(ok.total)}</td><td class="n">${money(ok.ganancia)}</td><td colspan="2"></td></tr>`)}`, { flush: true, acts: csvBtn("ventas") })}`;
 }
+
+// gráficos extra de Ventas: evolución, categorías, ganancia por producto, clientes y formas de pago
+function graficosVentas(vs, t) {
+  const prods = porProducto(vs);
+  const cats = {}; prods.forEach(p => { cats[p.cat] = (cats[p.cat] || 0) + p.total; });
+  const catR = Object.entries(cats).map(([nombre, v]) => ({ nombre, v })).sort((a, b) => b.v - a.v);
+  const ganR = prods.map(p => ({ nombre: p.nombre, v: p.total - p.costo, sub: `margen ${pct(p.total ? (p.total - p.costo) / p.total * 100 : NaN)} · ${nf.format(p.cant)} u.` })).sort((a, b) => b.v - a.v);
+  const cliR = agrupar(vs, v => v.cli || "_", v => nombreCli(v)).map(c => ({ nombre: c.nombre, v: c.total, sub: `${c.n} ${c.n === 1 ? "compra" : "compras"}` }));
+  const pagR = agrupar(vs, v => v.pago, v => PAGOS[v.pago] || v.pago).map(p => ({ nombre: p.nombre, v: p.total, sub: `${p.n} ${p.n === 1 ? "venta" : "ventas"}` }));
+  return `<div class="cols c-wide">${card("Ventas y ganancia · " + etiqueta(), `<div class="chart" id="chVentas"></div>`, { sub: P.modo === "dia" ? "Por hora" : P.modo === "anio" ? "Por mes" : "Por día" })}
+    ${card("Ventas por categoría", hbars(catR, { total: t.total, otros: "categorías" }), { sub: "Qué parte del total es cada categoría" })}</div>
+  <div class="cols">${card("Productos que más ganancia dejan", hbars(ganR, { total: t.ganancia, otros: "productos" }), { sub: `Ganancia bruta total ${money(t.ganancia)} = 100%` })}
+    ${card("Mejores clientes", hbars(cliR, { total: t.total, otros: "clientes" }), { sub: "Quién compró más en el período" })}
+    ${card("Formas de pago", hbars(pagR, { total: t.total }), { sub: "Cómo te pagaron" })}</div>`;
+}
+function postVentas() { const [a, b] = rango(); const el = $("#chVentas"); if (el) chart(el, serie(ventasEn(a, b), a, b)); }
 
 function pgProductos() {
   const [a, b] = rango(), q = S.prodQ.trim().toLowerCase();
@@ -897,10 +939,10 @@ function pgProductos() {
   const list = all.filter(([, p]) => (!S.prodCat || p.cat === S.prodCat) && (!S.prodBajo || (p.stock || 0) <= (p.min ?? 5)) && (!q || p.nombre.toLowerCase().includes(q) || (p.codigo || "").toLowerCase().includes(q)));
   let uds = 0, vc = 0, vp = 0;
   all.forEach(([, p]) => { const s = Math.max(0, p.stock || 0); uds += s; vc += s * p.costo; vp += s * p.precio; });
-  CSV.productos = [["Código", "Producto", "Categoría", "Costo", "Precio", "Margen %", "Stock", "Mínimo", "Valor al costo", `Vendidos (${etiqueta()})`], ...list.map(([id, p]) => [p.codigo || "", p.nombre, p.cat || "", p.costo, p.precio, p.precio ? Math.round((p.precio - p.costo) / p.precio * 1000) / 10 : "", p.stock || 0, p.min ?? 5, Math.max(0, p.stock || 0) * p.costo, vend[id]?.cant || 0])];
+  CSV.productos = [["Código", "Producto", "Categoría", "Costo", "Precio", "Ganancia por unidad", "Margen %", "Recargo sobre costo %", "Stock", "Mínimo", "Valor al costo", `Vendidos (${etiqueta()})`], ...list.map(([id, p]) => [p.codigo || "", p.nombre, p.cat || "", p.costo, p.precio, p.precio - p.costo, p.precio ? Math.round((p.precio - p.costo) / p.precio * 1000) / 10 : "", p.costo ? Math.round((p.precio - p.costo) / p.costo * 1000) / 10 : "", p.stock || 0, p.min ?? 5, Math.max(0, p.stock || 0) * p.costo, vend[id]?.cant || 0])];
   return `<div class="kpis">${kpi("Productos", nf0.format(all.length), `${categorias().length} categorías`)}${kpi("Unidades en stock", nf0.format(uds))}${kpi("Inventario al costo", money(vc), "lo que invertiste", "feat")}${kpi("Inventario a precio de venta", money(vp), `ganancia potencial ${money(vp - vc)}`)}${kpi("Stock bajo o agotado", nf0.format(bajos().length), bajos().length ? `<a href="#" data-act="soloBajo">ver solo esos</a>` : "todo en orden")}</div>
   ${card("Inventario", `<div class="row" style="padding:14px 18px 0"><input id="prodQ" type="search" placeholder="Buscar nombre o código" value="${esc(S.prodQ)}" style="max-width:280px"><select id="prodCat" style="max-width:200px"><option value="">Todas las categorías</option>${categorias().map(c => `<option${S.prodCat === c ? " selected" : ""}>${esc(c)}</option>`).join("")}</select><label class="chk"><input type="checkbox" id="prodBajo"${S.prodBajo ? " checked" : ""}> Solo stock bajo</label></div>
-  ${table(["Producto", "Categoría", "#Costo", "#Precio", "#Margen", "#Stock", "#Valor stock", `#Vendidos`, ""], list.map(([id, p]) => `<tr><td class="prodname"><b>${esc(p.nombre)}</b><span>${esc(p.codigo || "Sin código")}</span></td><td>${esc(p.cat || "—")}</td><td class="n">${money(p.costo)}</td><td class="n">${money(p.precio)}</td><td class="n">${pct(p.precio ? (p.precio - p.costo) / p.precio * 100 : NaN)}</td><td class="n">${stockChip(p)}</td><td class="n">${money(Math.max(0, p.stock || 0) * p.costo)}</td><td class="n">${nf.format(vend[id]?.cant || 0)}</td><td><div class="t-acts"><button class="btn sm" data-act="ajuste" data-id="${id}">Stock</button><button class="btn sm" data-act="kardex" data-id="${id}">Movimientos</button><button class="btn sm" data-act="editProd" data-id="${id}">Editar</button></div></td></tr>`), all.length ? "Ningún producto coincide con los filtros" : "Todavía no hay productos. Crea el primero con el botón Nuevo producto.")}`, { flush: true, sub: `Vendidos en: ${etiqueta()}`, acts: `<button class="btn sm" data-act="importar" data-id="productos">Importar desde Excel</button><button class="btn sm ghost" data-act="plantilla" data-id="productos">Plantilla</button>${csvBtn("productos")}<button class="btn sm pri" data-act="editProd" data-id="">${ico("plus")}Nuevo producto</button>` })}`;
+  ${table(["Producto", "Categoría", "#Costo", "#Precio", "#Ganancia c/u", "#Margen", "#Stock", "#Valor stock", `#Vendidos`, ""], list.map(([id, p]) => `<tr><td class="prodname"><b>${esc(p.nombre)}</b><span>${esc(p.codigo || "Sin código")}</span></td><td>${esc(p.cat || "—")}</td><td class="n">${money(p.costo)}</td><td class="n">${money(p.precio)}</td><td class="n">${money(p.precio - p.costo)}</td><td class="n" title="Margen: de cada $100 que cobras, ${pct(p.precio ? (p.precio - p.costo) / p.precio * 100 : NaN)} es ganancia. Recargo: al costo le sumaste ${pct(p.costo ? (p.precio - p.costo) / p.costo * 100 : NaN)}.">${pct(p.precio ? (p.precio - p.costo) / p.precio * 100 : NaN)}<span class="mg-sub">${p.costo ? `+${pct((p.precio - p.costo) / p.costo * 100)} al costo` : ""}</span></td><td class="n">${stockChip(p)}</td><td class="n">${money(Math.max(0, p.stock || 0) * p.costo)}</td><td class="n">${nf.format(vend[id]?.cant || 0)}</td><td><div class="t-acts"><button class="btn sm" data-act="ajuste" data-id="${id}">Stock</button><button class="btn sm" data-act="kardex" data-id="${id}">Movimientos</button><button class="btn sm" data-act="editProd" data-id="${id}">Editar</button></div></td></tr>`), all.length ? "Ningún producto coincide con los filtros" : "Todavía no hay productos. Crea el primero con el botón Nuevo producto.")}`, { flush: true, sub: `Vendidos en: ${etiqueta()}`, acts: `<button class="btn sm" data-act="importar" data-id="productos">Importar desde Excel</button><button class="btn sm ghost" data-act="plantilla" data-id="productos">Plantilla</button>${csvBtn("productos")}<button class="btn sm pri" data-act="editProd" data-id="">${ico("plus")}Nuevo producto</button>` })}`;
 }
 
 function pgCompras() {
@@ -1036,7 +1078,7 @@ function pgAjustes() {
     <div class="row"><span class="lbl" style="min-width:90px">Clientes</span><button class="btn" data-act="importar" data-id="clientes">Importar desde Excel</button><button class="btn ghost" data-act="plantilla" data-id="clientes">Descargar plantilla</button></div>`, { sub: "Archivos .xlsx que se abren en Excel, Numbers y Google Sheets" })}`;
 }
 
-const RENDER = { panel: [pgPanel, postPanel], pos: [pgPos, postPos], ventas: [pgVentas], productos: [pgProductos], compras: [pgCompras], clientes: [pgClientes, postClientes], gastos: [pgGastos], reportes: [pgReportes, postReportes], ajustes: [pgAjustes] };
+const RENDER = { panel: [pgPanel, postPanel], pos: [pgPos, postPos], ventas: [pgVentas, postVentas], productos: [pgProductos], compras: [pgCompras], clientes: [pgClientes, postClientes], gastos: [pgGastos], reportes: [pgReportes, postReportes], ajustes: [pgAjustes] };
 
 /* ===================== render ===================== */
 function renderShell() {
@@ -1531,7 +1573,7 @@ function leerCompraForm() {
 }
 function margenHint() {
   const c = num($("#fpCosto")?.value), p = num($("#fpPrecio")?.value), el = $("#fpMargen"); if (!el) return;
-  el.textContent = p ? `Ganas ${money(p - c)} por unidad (${pct((p - c) / p * 100)})` : "";
+  el.textContent = p ? `Ganas ${money(p - c)} por unidad: margen ${pct((p - c) / p * 100)} del precio${c ? `, +${pct((p - c) / c * 100)} sobre el costo` : ""}` : "";
 }
 
 const FORM = {
