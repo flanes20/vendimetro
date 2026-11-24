@@ -192,7 +192,7 @@ def pasos(w):
     ok("crear un cliente nuevo no pide código", titulo() == "Nuevo cliente", titulo())
     js(w, "ACT.cerrar(); ACT.editProd('')"); esperar(w)
     ok("crear un producto nuevo no pide código", titulo() == "Nuevo producto", titulo())
-    ok("botón Crear producto con color distinto de Nueva venta", js(w, "(()=>{const s=[...document.querySelectorAll('button[type=submit]')].find(b=>b.textContent==='Crear producto'), n=document.querySelector('[data-act=go][data-id=pos]'); return !!s && !!n && getComputedStyle(s).backgroundColor!==getComputedStyle(n).backgroundColor})()") is True)
+    ok("botón Crear producto con color distinto de Nueva venta", js(w, "(()=>{const s=[...document.querySelectorAll('button[type=submit]')].find(b=>b.textContent==='Crear producto'), n=document.querySelector('#head .btn.pri[data-id=pos]'), bg=e=>getComputedStyle(e).backgroundColor; return !!s && !!n && bg(s)!==bg(n) && bg(n)!=='rgba(0, 0, 0, 0)'})()") is True)
     js(w, f"ACT.cerrar(); ACT.editCli('{cid}')"); esperar(w)
     js(w, "$('#admPin').value='4321'; FORM.adminPin();"); esperar(w, 2)
     ok("con el código se puede editar el cliente", titulo() == "Editar cliente", titulo())
