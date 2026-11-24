@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 PUERTO = 8765
-VERSION = "1.18"
+VERSION = "1.19"
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
 DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
