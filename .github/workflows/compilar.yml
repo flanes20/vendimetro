@@ -4,6 +4,10 @@ on:
   push:
   workflow_dispatch:
 
+# para subir los instaladores directo al release de la versión (si ya existe, aunque sea borrador)
+permissions:
+  contents: write
+
 jobs:
   mac:
     strategy:
@@ -36,7 +40,8 @@ jobs:
           export VENDIMETRO_DATOS="$RUNNER_TEMP/datos"
           VENDIMETRO_SIN_VENTANA=1 "dist/Vendímetro.app/Contents/MacOS/Vendímetro" &
           PID=$!
-          sleep 10
+          # en los Mac Intel de GitHub a veces tarda más en abrir: espera hasta 60 s
+          for i in $(seq 1 30); do sleep 2; curl -sf -m 5 http://127.0.0.1:8765/api/info && break; done
           curl -sf http://127.0.0.1:8765/api/info
           curl -sf http://127.0.0.1:8765/ | grep -q "Vendímetro"
           # cerrarla para que no deje ocupados los archivos al armar el .dmg
@@ -53,7 +58,14 @@ jobs:
             [ $i = 5 ] && exit 1
             sleep 10
           done
+      - name: Subir al release de la versión
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(python -c "import re;print(re.search(r'VERSION = \"(.+?)\"', open('app.py', encoding='utf-8').read()).group(1))")
+          if gh release view "v$VER" > /dev/null 2>&1; then gh release upload "v$VER" "Vendimetro-Mac-${{ matrix.chip }}.dmg" --clobber; else echo "No hay release v$VER todavía"; fi
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: Vendimetro-Mac-${{ matrix.chip }}
           path: "*.dmg"
@@ -73,7 +85,16 @@ jobs:
           python pruebas/prueba_excel.py
       - name: Compilar
         run: python -m PyInstaller --noconfirm --onefile --windowed --name "Vendímetro" --icon icono.ico --add-data "web;web" --add-data "icono.ico;." app.py
+      - name: Subir al release de la versión
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/*.exe Vendimetro-Windows.exe
+          VER=$(python -c "import re;print(re.search(r'VERSION = \"(.+?)\"', open('app.py', encoding='utf-8').read()).group(1))")
+          if gh release view "v$VER" > /dev/null 2>&1; then gh release upload "v$VER" Vendimetro-Windows.exe --clobber; else echo "No hay release v$VER todavía"; fi
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: Vendimetro-Windows
           path: dist/*.exe
