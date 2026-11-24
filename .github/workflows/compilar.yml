@@ -57,6 +57,7 @@ jobs:
         with:
           name: Vendimetro-Mac-${{ matrix.chip }}
           path: "*.dmg"
+          retention-days: 3  # los instaladores quedan en Releases; esto evita llenar el espacio de GitHub
 
   windows:
     runs-on: windows-latest
@@ -76,3 +77,4 @@ jobs:
         with:
           name: Vendimetro-Windows
           path: dist/*.exe
+          retention-days: 3
