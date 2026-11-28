@@ -49,3 +49,7 @@ python app.py
 - `pruebas/`: pruebas que abren el programa real y verifican ventas, stock, Excel y guardado (`python pruebas/prueba_e2e.py`).
 
 Cada cambio que se sube a GitHub ejecuta las pruebas y arma los instaladores de Mac y Windows (ver `.github/workflows/compilar.yml`). Los instaladores quedan en la pestaña **Actions**; para publicarlos se crea una versión nueva en **Releases**.
+
+## Licencia
+
+© 2026 flanes20. **Todos los derechos reservados.** El código está público solo para que se pueda ver como portafolio: no se permite copiarlo, modificarlo, venderlo ni usarlo en otros programas sin permiso escrito del autor. Ver [LICENSE](LICENSE).

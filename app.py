@@ -1,3 +1,4 @@
+# Copyright (c) 2026 flanes20. Todos los derechos reservados. Ver LICENSE.
 """Vendímetro: programa de escritorio con base de datos SQLite.
 
 Abre su propia ventana; por dentro, un pequeño servidor local entrega la
@@ -21,7 +22,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 PUERTO = 8765
-VERSION = "1.19"
+VERSION = "1.20"
 COLECCIONES = {"config", "productos", "clientes", "proveedores", "dias", "compras", "gastos", "ajustes", "abonos"}
 RESPALDOS_A_GUARDAR = 30
 DOC_ADMIN = ("config", "admin")  # código de administrador: solo lo toca el servidor, nunca la pantalla
