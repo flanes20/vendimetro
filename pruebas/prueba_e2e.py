@@ -220,7 +220,19 @@ def pasos(w):
     js(w, "for (const t of ['producto','categoria','cliente','pago']) { S.repTab=t; S.page='reportes'; render(); }")
     js(w, f"S.cliSel='{cid}'; ACT.go('clientes'); ACT.kardex('{pid}'); ACT.cerrar();")
     # demostración: entrar, recorrer, salir
-    js(w, "ACT.verDemo(); for (const p of Object.keys(PAGES)) { S.page=p; render(); } ACT.salirDemo();"); esperar(w)
+    js(w, "ACT.verDemo(); for (const p of Object.keys(PAGES)) { S.page=p; render(); }"); esperar(w)
+    # Ventas: las filas "N clientes más" y "N productos más" se pinchan y abren la lista, como "Otros"
+    js(w, "P.modo='mes'; ACT.go('ventas')"); esperar(w, 0.5)
+    for otros in ("clientes", "productos"):
+        info = js(w, f"""(()=>{{const b=[...document.querySelectorAll('.hb-mas')].find(b=>b.dataset.id.startsWith('{otros}|')); if(!b) return null;
+          const n=+b.querySelector('.hb-n').firstChild.textContent.split(' ')[0], vis=b.closest('.hbars').querySelectorAll('.hb').length-1;
+          b.click(); const filas=document.querySelectorAll('#dlgB .hb').length, t=$('#dlgT').textContent, txt=$('#dlgB').textContent; ACT.cerrar();
+          return JSON.stringify({{n, vis, filas, t, txt: txt.slice(0,120), abierta: filas>0}})}})()""")
+        d = json.loads(info) if info else {}
+        ok(f"fila «{otros} más» abre la lista de esos {otros}", bool(d) and d["filas"] == d["n"] and d["vis"] == 8 and f"{d['n']} más" in d["t"] and "Suman" in d["txt"], info)
+    ok("la fila «más» ya no muestra la lista larga de nombres", js(w, "[...document.querySelectorAll('.hb-mas small')].every(s=>s.textContent==='Ver cuáles ▸')") is True)
+    ok("la demostración tiene 14 clientes", js(w, "Object.keys(S.data.clientes).length") == 14)
+    js(w, "ACT.salirDemo();"); esperar(w)
     ok("datos reales intactos después de la demostración", js(w, "S.data.productos[Object.keys(S.data.productos)[0]].nombre") == "Café 500 g")
     errs = js(w, "window.__err")
     ok("sin errores en pantalla", not errs, "; ".join(errs or []))

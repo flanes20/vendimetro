@@ -217,6 +217,12 @@ td.prodname { min-width: 170px; }
 .otros-hint { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
 .otros-hint b { color: var(--ink); }
 .hbars { display: flex; flex-direction: column; gap: 12px; }
+.hb, .hb-bar { display: block; }
+.hb-mas { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 6px; margin: -6px; width: calc(100% + 12px); border-radius: 8px; cursor: pointer; }
+.hb-mas small { color: var(--accent) !important; font-weight: 600 !important; }
+.hb-mas:hover, .hb-mas:focus-visible { background: var(--line-2); }
+.hb-mas:hover .hb-bar i, .hb-mas:focus-visible .hb-bar i { background: var(--accent); }
+.hb-mas:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .hb-t { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font-size: 13px; margin-bottom: 4px; }
 .hb-n { font-weight: 600; min-width: 0; }
 .hb-n small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); }
@@ -571,13 +577,30 @@ function verOtros() {
     ${hbars(resto.map(p => ({ nombre: p.nombre, v: p.total, sub: `${nf.format(p.cant)} unidades` })), { total, max: Infinity })}`);
 }
 // barras horizontales: nombre, barra, monto y % (rows: [{nombre, v, sub?}])
-function hbars(rows, { total, vacio = "Sin ventas en este período", max = 8, otros = "otros" } = {}) {
+// Si hay más de `max`, la última fila junta el resto; al pincharla se abre la lista de esos (como "Otros").
+// `base` dice de qué es el % en esa ventana (p. ej. "del total vendido").
+const RESTOS = {};
+function hbars(rows, { total, vacio = "Sin ventas en este período", max = 8, otros = "otros", base = "del total" } = {}) {
   rows = rows.filter(r => r.v);
   if (!rows.length) return `<p class="empty">${vacio}</p>`;
   const T = total ?? rows.reduce((a, r) => a + r.v, 0), vis = rows.slice(0, max), resto = rows.slice(max);
-  if (resto.length) vis.push({ nombre: `${resto.length} ${otros} más`, v: resto.reduce((a, r) => a + r.v, 0), sub: resto.map(r => r.nombre).join(", "), gris: true });
+  let key = "";
+  if (resto.length) {
+    key = otros + "|" + T;
+    RESTOS[key] = { resto, T, otros, base };
+    vis.push({ nombre: `${resto.length} ${otros} más`, v: resto.reduce((a, r) => a + r.v, 0), sub: "Ver cuáles ▸", gris: true });
+  }
   const mx = Math.max(...vis.map(r => r.v));
-  return `<div class="hbars">${vis.map(r => `<div class="hb"><div class="hb-t"><span class="hb-n">${esc(r.nombre)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</span><span class="hb-v"><b>${money(r.v)}</b>${T ? `<i>${pct(r.v / T * 100)}</i>` : ""}</span></div><div class="hb-bar"><i class="${r.gris ? "gris" : ""}" style="width:${Math.max(1, r.v / mx * 100)}%"></i></div></div>`).join("")}</div>`;
+  const fila = r => `<span class="hb-t"><span class="hb-n">${esc(r.nombre)}${r.sub ? `<small>${esc(r.sub)}</small>` : ""}</span><span class="hb-v"><b>${money(r.v)}</b>${T ? `<i>${pct(r.v / T * 100)}</i>` : ""}</span></span><span class="hb-bar"><i class="${r.gris ? "gris" : ""}" style="width:${Math.max(1, r.v / mx * 100)}%"></i></span>`;
+  return `<div class="hbars">${vis.map(r => r.gris
+    ? `<button type="button" class="hb hb-mas" data-act="verResto" data-id="${esc(key)}" title="Pincha para ver estos ${esc(otros)}">${fila(r)}</button>`
+    : `<div class="hb">${fila(r)}</div>`).join("")}</div>`;
+}
+function verResto(key) {
+  const g = RESTOS[key]; if (!g?.resto.length) return;
+  const suma = g.resto.reduce((a, r) => a + r.v, 0);
+  abrir(`${g.otros[0].toUpperCase() + g.otros.slice(1)} · ${g.resto.length} más`, `<p class="muted" style="margin:0 0 14px">Suman ${money(suma)}, el ${pct(suma / g.T * 100)} ${g.base} (${money(g.T)}). El % de cada uno es sobre ese total.</p>
+    ${hbars(g.resto, { total: g.T, max: Infinity })}`);
 }
 function agrupar(list, keyFn, nameFn) {
   const m = {};
@@ -947,10 +970,10 @@ function graficosVentas(vs, t) {
   const cliR = agrupar(vs, v => v.cli || "_", v => nombreCli(v)).map(c => ({ nombre: c.nombre, v: c.total, sub: `${c.n} ${c.n === 1 ? "compra" : "compras"}` }));
   const pagR = agrupar(vs, v => v.pago, v => PAGOS[v.pago] || v.pago).map(p => ({ nombre: p.nombre, v: p.total, sub: `${p.n} ${p.n === 1 ? "venta" : "ventas"}` }));
   return `<div class="cols c-wide">${card("Ventas y ganancia · " + etiqueta(), `<div class="chart" id="chVentas"></div>`, { sub: P.modo === "dia" ? "Por hora" : P.modo === "anio" ? "Por mes" : "Por día" })}
-    ${card("Ventas por categoría", hbars(catR, { total: t.total, otros: "categorías" }), { sub: "Qué parte del total es cada categoría" })}</div>
-  <div class="cols">${card("Productos que más ganancia dejan", hbars(ganR, { total: t.ganancia, otros: "productos" }), { sub: `Ganancia bruta total ${money(t.ganancia)} = 100%` })}
-    ${card("Mejores clientes", hbars(cliR, { total: t.total, otros: "clientes" }), { sub: "Quién compró más en el período" })}
-    ${card("Formas de pago", hbars(pagR, { total: t.total }), { sub: "Cómo te pagaron" })}</div>`;
+    ${card("Ventas por categoría", hbars(catR, { total: t.total, otros: "categorías", base: "del total vendido" }), { sub: "Qué parte del total es cada categoría" })}</div>
+  <div class="cols">${card("Productos que más ganancia dejan", hbars(ganR, { total: t.ganancia, otros: "productos", base: "de la ganancia bruta" }), { sub: `Ganancia bruta total ${money(t.ganancia)} = 100%` })}
+    ${card("Mejores clientes", hbars(cliR, { total: t.total, otros: "clientes", base: "del total vendido" }), { sub: "Quién compró más en el período" })}
+    ${card("Formas de pago", hbars(pagR, { total: t.total, otros: "formas de pago", base: "del total vendido" }), { sub: "Cómo te pagaron" })}</div>`;
 }
 function postVentas() { const [a, b] = rango(); const el = $("#chVentas"); if (el) chart(el, serie(ventasEn(a, b), a, b)); }
 
@@ -1457,6 +1480,7 @@ const ACT = {
   },
   verVenta: id => { const v = buscarVenta(id); if (v) verVenta(v); },
   verOtros: () => verOtros(),
+  verResto: k => verResto(k),
   dlTicket: id => { const v = buscarVenta(id); if (v) descargar(`ticket-${v.folio || v.id}.html`, ticketDoc(v)); },
   printTicket: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "ticket"); },
   printA4: id => { const v = buscarVenta(id); if (v) imprimirVenta(v, "a4"); },
@@ -1811,9 +1835,11 @@ function demoData() {
   prods.push(["Esponja doble faz", "Limpieza", 180, 350], ["Esponja de acero", "Limpieza", 220, 420], ["Paño multiuso x3", "Limpieza", 600, 1100], ["Escobillón", "Limpieza", 1800, 3200], ["Guantes de goma", "Limpieza", 700, 1300],
     ["Bolsas de basura x10", "Limpieza", 450, 850], ["Limpiavidrios 500 ml", "Limpieza", 900, 1650], ["Cloro gel 900 ml", "Limpieza", 850, 1500], ["Trapero", "Limpieza", 1200, 2200], ["Desinfectante 1 L", "Limpieza", 1300, 2400]);
   prods.forEach(([n, c, co, pr], i) => d.productos["dp" + i] = { nombre: n, cat: c, codigo: "779" + (100200 + i * 37), costo: co, precio: pr, stock: [40, 6, 55, 18, 3, 9, 24, 30, 0, 48, 14, 20, 12, 8][i] ?? 15 + (i * 7) % 30, min: 8 });
-  const calles = [["Los Aromos 123", "Ñuñoa"], ["Av. Pajaritos 2450", "Maipú"], ["San Diego 980", "Santiago"], ["Av. Perú 615", "Viña del Mar"], ["Pasaje Las Rosas 44", "La Florida"], ["Gran Avenida 5120", "San Miguel"]];
-  ["Ana Torres", "Carlos Méndez", "Kiosco La Esquina", "Bar El Puerto", "Lucía Fernández", "Jorge Ruiz"].forEach((n, i) => {
-    const cuerpo = String(i === 2 || i === 3 ? 76100000 + i * 23457 : 12000000 + i * 1234567);
+  const calles = [["Los Aromos 123", "Ñuñoa"], ["Av. Pajaritos 2450", "Maipú"], ["San Diego 980", "Santiago"], ["Av. Perú 615", "Viña del Mar"], ["Pasaje Las Rosas 44", "La Florida"], ["Gran Avenida 5120", "San Miguel"], ["Irarrázaval 3300", "Ñuñoa"], ["Av. Matta 820", "Santiago"], ["Vicuña Mackenna 6100", "La Florida"], ["Av. Recoleta 1450", "Recoleta"], ["Los Leones 210", "Providencia"], ["Av. Ossa 1890", "La Reina"], ["Camino Agrícola 455", "Macul"], ["Av. Departamental 990", "La Cisterna"]];
+  // 14 clientes para que "Mejores clientes" muestre la fila "N clientes más"
+  const clis = ["Ana Torres", "Carlos Méndez", "Kiosco La Esquina", "Bar El Puerto", "Lucía Fernández", "Jorge Ruiz", "Minimarket Don Pepe", "Restorán La Olla", "Marcela Soto", "Colegio San Andrés", "Pedro Rojas", "Botillería El Faro", "Hostal Los Andes", "Valentina Díaz"];
+  clis.forEach((n, i) => {
+    const cuerpo = String([2, 3, 6, 7, 9, 11, 12].includes(i) ? 76100000 + i * 23457 : 12000000 + i * 1234567);
     d.clientes["dc" + i] = { nombre: n, doc: rut(cuerpo + rutDV(cuerpo)).fmt, tel: `+56 9 ${5300 + i * 17} ${4400 + i * 131}`, dir: calles[i][0], comuna: calles[i][1] };
   });
   ["Distribuidora Norte", "Lácteos del Valle", "Bebidas Sur SA"].forEach((n, i) => d.proveedores["ds" + i] = { nombre: n, contacto: ["Pablo", "Marta", "Diego"][i], tel: `11 4${200 + i * 11} 99${10 + i}` });
@@ -1833,7 +1859,7 @@ function demoData() {
       }
       let pago = pagos[Math.floor(r() * pagos.length)];
       if (pago === "fiado" && r() < 0.85) pago = "efectivo";
-      const cli = pago === "fiado" || r() < 0.4 ? "dc" + Math.floor(Math.pow(r(), 1.5) * 6) : "";
+      const cli = pago === "fiado" || r() < 0.4 ? "dc" + Math.floor(Math.pow(r(), 1.5) * clis.length) : "";
       if (!cli && pago === "fiado") pago = "efectivo";
       const sub = items.reduce((a, i) => a + i.cant * i.precio, 0), desc = r() < 0.08 ? Math.round(sub * 0.1) : 0;
       ventas.push({ id: "dv" + f + k, folio: ++folio, hora: `${pad(8 + Math.floor(r() * 13))}:${pad(Math.floor(r() * 60))}`, cli, cliNombre: d.clientes[cli]?.nombre || "", items, sub, desc, total: sub - desc, costo: items.reduce((a, i) => a + i.cant * i.costo, 0), pago, recibido: 0, nota: "", estado: r() < 0.01 ? "anulada" : "ok" });
